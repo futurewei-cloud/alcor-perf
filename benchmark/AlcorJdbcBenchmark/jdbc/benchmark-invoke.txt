@@ -1,0 +1,7 @@
+postgres:
+-m -N -s nodeinfo-postgres-ddl.sql -d postgres -U pkommoju -p p@ssw0rd -D pkommoju -n 100000 -w 4 -u jdbc:postgresql://10.213.43.164:5432/pkommoju
+
+ignite:
+-s nodeinfo-ignite-ddl.sql -v -d ignite -u jdbc:ignite:thin://localhost -w 2 -n
+
+-m -N -s nodeinfo-postgres-ddl.sql -d postgres -U pkommoju -p p@ssw0rd -D pkommoju -n 1000 -w 2 -u jdbc:postgresql://127.0.0.1:5432/pkommoju
