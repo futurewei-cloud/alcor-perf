@@ -558,13 +558,13 @@ Latency for each insert has been collected and saved in log files for each run. 
 === Comparative latency plots by number of threads
 These plots are drawn per thread by varying the number of rows handled by each thread.
 
-image::images/10-thr-lat.png[]
+image::10-thr-lat.png[10_threads,1280]
 
-image::images/20-thr-lat.png[]
+image::20-thr-lat.png[20_threads,1280]
 
-image::images/30-thr-lat.png[]
+image::30-thr-lat.png[30_threads,1280]
 
-image::images/40-thr-lat.png[]
+image::40-thr-lat.png[40_threads,1280]
 
 === Conclusion
 PostgreSQL is overall better, P95 latency and all other timings being faster by at least 30% in most runs, barring a few abnormalities.
