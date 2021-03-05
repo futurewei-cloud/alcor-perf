@@ -1,6 +1,9 @@
 = Ignite and PostgreSQL INSERT Benchmark: Using JDBC/SQL Interface
-Prasad kommoju <pkommoju@futurewei.com>
-v1.0, 2021 March 03
+
+:revnumber: v1.0
+:revdate: 2021 March 03
+:author: Prasad kommoju
+:email: pkommoju@futurewei.com>
 
 :toc: right
 :imagesdir: images
@@ -14,7 +17,7 @@ The tests were run with 10, 20, 30 and 40 threads concurrently inserting 100K, 1
 
 
 == Configuration
-== Client
+=== Client
 Client AlcorJdbcBenchmark is a standalone Java application run from 10.213.43.161.
 Running the client, data collection and creating the plots is documented at the end of this document [section: Running the client].
 
@@ -52,10 +55,10 @@ create table nodeinfo
         host_dvr_mac    VARCHAR(18)
 );
 
-=== Raw latency data
+== Raw latency data
 Latency for each insert has been collected and saved in log files for each run. The tar, gzip version of these log files is in latency-logs/iginie-postgres-insert-latency.log.tar.gz.
 
-==== Ignite
+=== Ignite
 [source]
 10 threads
 
@@ -305,7 +308,7 @@ Latency for each insert has been collected and saved in log files for each run. 
 |846849
 |===
 
-==== PostgreSQL
+=== PostgreSQL
 [source]
 10 threads
 
@@ -555,6 +558,244 @@ Latency for each insert has been collected and saved in log files for each run. 
 |6.7449e+05
 |===
 
+=== Comparative analysis of Ignite and Postgres Performance.
+
+The tables below present Ignite performance as a percentage of Postgres latencies (ignite time / postgres time * 100)
+
+|===
+|Rows |Threads |Minimum |Maximum |Average |Stddev |P25 |P50 |P75 |P95
+|100000
+|10
+|   79.7204
+| 1184.7964
+|  148.0269
+| 1040.8890
+|   93.1067
+|  128.1543
+|  158.6877
+|  166.0127
+
+|1000000
+|10
+|   74.4247
+|  117.0328
+|  145.6338
+|  308.0964
+|   88.0460
+|  106.7568
+|  153.8859
+|  160.4679
+
+|2000000
+|10
+|   75.1732
+| 1925.5659
+|  125.5112
+| 1214.6050
+|   88.7316
+|  107.1108
+|  154.9198
+|  161.8439
+
+|5000000
+|10
+|   73.8950
+|  233.8780
+|  122.7003
+|  261.5694
+|   88.5985
+|  106.6560
+|  154.1063
+|  160.6524
+
+|10000000
+|10
+|   73.9481
+|   57.6889
+|  118.7575
+|   93.7873
+|   87.0906
+|  104.6757
+|  150.5627
+|  155.7042
+|===
+
+|===
+|Rows |Threads |Minimum |Maximum |Average |Stddev |P25 |P50 |P75 |P95
+|100000
+|20
+|   73.6001
+|  939.2059
+|  117.4404
+|  603.6126
+|   75.3822
+|   94.9629
+|  143.8947
+|  148.1822
+
+|1000000
+|20
+|   72.5280
+|  138.7470
+|  107.7273
+|  173.0183
+|   73.5525
+|   90.5912
+|  141.8862
+|  152.0460
+
+|2000000
+|20
+|   70.9620
+|   70.1713
+|  106.6031
+|  158.3673
+|   74.3654
+|   91.2715
+|  142.6701
+|  151.1056
+
+|5000000
+|20
+|   74.2224
+|   96.0004
+|  114.8105
+|  128.0487
+|   75.0229
+|   91.3709
+|  142.6201
+|  152.0164
+
+|10000000
+|20
+|   72.3935
+|   63.8305
+|   98.6276
+|   71.4402
+|   73.0029
+|   89.0685
+|  137.8290
+|  142.9706
+|===
+
+|===
+|Rows |Threads |Minimum |Maximum |Average |Stddev |P25 |P50 |P75 |P95
+|100000
+|30
+|   73.3044
+|  802.3626
+|  109.7820
+|  522.7963
+|   69.0610
+|   92.7063
+|  137.0138
+|  137.7361
+
+|1000000
+|30
+|   72.0302
+|  188.6644
+|  103.4715
+|  200.5945
+|   68.8524
+|   86.5439
+|  138.6659
+|  143.8271
+
+|2000000
+|30
+|   70.8686
+|   80.3859
+|  105.1565
+|  176.3865
+|   69.9752
+|   87.6449
+|  140.7579
+|  145.8327
+
+|5000000
+|30
+|   72.4989
+|  115.1667
+|  102.2880
+|  117.0622
+|   69.0385
+|   86.7806
+|  137.3992
+|  140.7838
+
+|10000000
+|30
+|   65.1082
+|  362.5311
+|   92.4230
+|  161.0751
+|   67.8695
+|   85.5552
+|  134.1250
+|  133.8100
+|===
+
+|===
+|Rows |Threads |Minimum |Maximum |Average |Stddev |P25 |P50 |P75 |P95
+|100000
+|40
+|   73.7532
+|  490.1220
+|  106.3545
+|  345.5440
+|   67.0363
+|  112.1920
+|  132.9070
+|   69.2570
+
+|1000000
+|40
+|   72.7124
+|  378.2925
+|  107.8859
+|  306.9897
+|   69.0009
+|   96.2147
+|  138.5150
+|  134.6242
+
+|2000000
+|40
+|   71.5925
+|   88.1002
+|  101.4562
+|  113.1231
+|   69.7462
+|   95.8160
+|  140.2645
+|  137.1496
+
+|5000000
+|40
+|   72.8988
+|   73.1305
+|   94.1264
+|   62.4139
+|   69.2765
+|   95.1603
+|  139.1864
+|  132.0850
+
+|10000000
+|40
+|   71.7139
+|  237.4471
+|   87.5363
+|  113.3759
+|   68.9029
+|   95.0293
+|  135.9125
+|  125.5540
+|===
+
+
+
 === Comparative latency plots by number of threads
 These plots are drawn per thread by varying the number of rows handled by each thread.
 
@@ -567,7 +808,7 @@ image::30-thr-lat.png[30_threads,880]
 image::40-thr-lat.png[40_threads,880]
 
 === Conclusion
-PostgreSQL is overall better, P95 latency and all other timings being faster by at least 30% in most runs, barring a few abnormalities.
+PostgreSQL is overall better, P95 latency and all other timings being faster by at least 30% in most runs, barring a few abnormalities. Iginte does better than Postgres in 69 out of 200 measurement samples, but even in these cases the standard deviation of latency is better with PostgreSQL (except in two are three cases where PostgreSQL has stalled for a while).
 This may be partly due to the fact that Ignite is primarily a KV store exposing a SQL interface while SQL interface is native to PostgreSQL.
 Aty the very least, PostgreSQL is not going to degrade performance. If Clustering extensions are used, PostgreSQL is likely to offer better scalability too.
 
@@ -634,4 +875,4 @@ java -cp <classpath for ignite jdbc driver> -s nodeinfo-ignite-ddl.sql -v -d ign
 
 Send the output to a logfile for post processing and collecting the timings and plotting.
 
-latencyplot2d.sh generates the plots shown in this document but the latency data needs to be orginized by thread, i.e, collect different database latencies for each thread count into a separate file.
+latencyplot2d.sh generates the plots shown in this document, but the latency data needs to be organized by the thread, i.e, collect different database latencies for each thread count into a separate file.
