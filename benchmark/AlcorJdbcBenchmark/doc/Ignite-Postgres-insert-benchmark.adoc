@@ -1,5 +1,4 @@
 = Ignite and PostgreSQL INSERT Benchmark: Using JDBC/SQL Interface
-
 :revnumber: v1.0
 :revdate: 2021 March 03
 :author: Prasad kommoju
@@ -794,8 +793,6 @@ The tables below present Ignite performance as a percentage of Postgres latencie
 |  125.5540
 |===
 
-
-
 === Comparative latency plots by number of threads
 These plots are drawn per thread by varying the number of rows handled by each thread.
 
@@ -809,8 +806,6 @@ image::40-thr-lat.png[40_threads,880]
 
 === Conclusion
 PostgreSQL is overall better, P95 latency and all other timings being faster by at least 30% in most runs, barring a few abnormalities. Iginte does better than Postgres in 69 out of 200 measurement samples, but even in these cases the standard deviation of latency is better with PostgreSQL (except in two are three cases where PostgreSQL has stalled for a while).
-This may be partly due to the fact that Ignite is primarily a KV store exposing a SQL interface while SQL interface is native to PostgreSQL.
-Aty the very least, PostgreSQL is not going to degrade performance. If Clustering extensions are used, PostgreSQL is likely to offer better scalability too.
 
 === Running the benchmark
 The benchmark is a self-contained standalone java application. It is invoked by runbm.sh for a single run, or runloop.sh for multiple runs. runbm.sh and runloop.sh accept same command line arguments as the benchmark program itself, but they are slightly more convenient than running the jar file by itself.
