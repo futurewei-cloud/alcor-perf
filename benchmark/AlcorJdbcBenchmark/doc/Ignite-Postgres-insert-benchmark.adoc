@@ -1,0 +1,873 @@
+= Ignite and PostgreSQL INSERT Benchmark: Using JDBC/SQL Interface
+:revnumber: v1.0
+:revdate: 2021 March 03
+:author: Prasad kommoju
+:email: pkommoju@futurewei.com>
+
+:toc: right
+:imagesdir: images
+
+== Overview
+
+This document presents the result of insert performance tests run with Apache Ignite v 2.9.1 and PostgreSQL
+v 13.1-1. Ignite and PostgreSQL were run with best practice configurations. Nodeinfo table was the target of these measurements. In Ignite, it was partitioned, and these partitions were replicated. In PostgreSQL the table was replicated wholesale.
+
+The tests were run with 10, 20, 30 and 40 threads concurrently inserting 100K, 1M, 2M, 5M, and 10M rows distributed equally among all the threads. Total number of rows were adjusted to the next higher multiple when the sum of per thread rows did not add up to total number of rows.
+
+
+== Configuration
+=== Client
+Client AlcorJdbcBenchmark is a standalone Java application run from 10.213.43.161.
+Running the client, data collection and creating the plots is documented at the end of this document [section: Running the client].
+
+=== Ignite Cluster
+Ignite was configured on 10.213.43.164 as primary and 10.213.43.163 as the replica for the partitions. This is the complete Ignite configuration file
+include::./alcor-remote-benchmark-config.xml[].
+Nodeinfo table definition
+[source, SQL]
+drop table if exists nodeinfo;
+create table nodeinfo
+(
+        node_id         VARCHAR PRIMARY KEY,
+        node_name       VARCHAR,
+        loacl_ip        VARCHAR(40),
+        mac_address     VARCHAR(40),
+        veth            int,
+        host_dvr_mac    VARCHAR(18)
+) WITH "template=partitioned";
+
+
+
+=== PostgreSQL
+PostgreSQL primary is run on 10.213.164 and the replica on 10.213.43.163. This is the complete PostgreSQL configuration file
+include::postgresql.conf[].
+Nodeinfo table definition
+[source, SQL]
+drop table if exists nodeinfo;
+create table nodeinfo
+(
+        node_id         VARCHAR(40) PRIMARY KEY,
+        node_name       VARCHAR(40),
+        local_ip        VARCHAR(40),
+        mac_address     VARCHAR(40),
+        veth            int,
+        host_dvr_mac    VARCHAR(18)
+);
+
+== Raw latency data
+Latency for each insert has been collected and saved in log files for each run. The tar, gzip version of these log files is in latency-logs/iginie-postgres-insert-latency.log.tar.gz.
+
+=== Ignite
+[source]
+10 threads
+
+|===
+|Rows |Threads |Minimum |Maximum |Average |Stddev |P25 |P50 |P75 |P95
+
+|100000
+|10
+|2.5326e+05
+|2.0482e+07
+|4.1204e+05
+|3.4557e+05
+|3.5005e+05
+|3.8321e+05
+|4.2048e+05
+|4.8552e+05
+
+|1000000
+|10
+|2.5595e+05
+|3.9923e+08
+|4.2898e+05
+|1.3438e+06
+|3.5369e+05
+|3.8850e+05
+|4.2525e+05
+|4.8428e+05
+
+|2000000
+|10
+|2.5408e+05
+|1.5020e+08
+|4.1715e+05
+|5.6816e+05
+|3.5329e+05
+|3.8716e+05
+|4.2278e+05
+|477627
+
+|5000000
+|10
+|2.5543e+05
+|4.5900e+08
+|4.2114e+05
+|9.3998e+05
+|3.5311e+05
+|3.8732e+05
+|4.2313e+05
+|479490
+
+|10000000
+|10
+|2.5526e+05
+|1.7896e+09
+|4.5150e+05
+|2.9971e+06
+|3.6183e+05
+|3.9780e+05
+|4.3451e+05
+|496718
+|===
+
+
+[source]
+20 threads
+
+|===
+|Rows |Threads |Minimum |Maximum |Average |Stddev |P25 |P50 |P75 |P95
+|100000
+|20
+|1.8888e+05
+|2.6634e+08
+|5.4968e+05
+|3.7293e+06
+|2.9090e+05
+|4.0609e+05
+|6.6711e+05
+|811914
+
+|1000000
+|20
+|1.8895e+05
+|2.5313e+08
+|5.1610e+05
+|2.4752e+06
+|2.8926e+05
+|3.9120e+05
+|6.5882e+05
+|7.9630e+05
+
+|2000000
+|20
+|1.8470e+05
+|2.2852e+08
+|5.1549e+05
+|2.0990e+06
+|2.9149e+05
+|3.9286e+05
+|6.6149e+05
+|7.9856e+05
+
+|5000000
+|20
+|1.8733e+05
+|1.0873e+09
+|5.5721e+05
+|3.9649e+06
+|2.9496e+05
+|3.9517e+05
+|6.6451e+05
+|801029
+
+|10000000
+|20
+|1.8477e+05
+|1.2048e+09
+|5.4616e+05
+|3.7609e+06
+|2.9326e+05
+|3.9395e+05
+|6.6027e+05
+|796132
+|===
+
+[source]
+
+30 threads
+
+|===
+|Rows |Threads |Minimum |Maximum |Average |Stddev |P25 |P50 |P75 |P95
+
+|100000
+|30
+|1.9260e+05
+|2.1395e+08
+|5.6844e+05
+|3.4595e+06
+|2.8978e+05
+|4.2593e+05
+|6.8411e+05
+|821703
+
+|1000000
+|30
+|1.8797e+05
+|3.4735e+08
+|5.3800e+05
+|2.7329e+06
+|2.9159e+05
+|3.9728e+05
+|6.8433e+05
+|815652
+
+|2000000
+|30
+|1.8153e+05
+|2.6410e+08
+|5.4368e+05
+|2.7384e+06
+|2.9370e+05
+|3.9839e+05
+|6.8680e+05
+|817073
+
+|5000000
+|30
+|1.8704e+05
+|4.8423e+08
+|5.5927e+05
+|3.3392e+06
+|2.9340e+05
+|4.0005e+05
+|6.8150e+05
+|812435
+
+|10000000
+|30
+|1.7003e+05
+|6.8580e+09
+|6.0672e+05
+|1.3688e+07
+|2.9116e+05
+|3.9873e+05
+|6.7595e+05
+|807288
+|===
+
+[source]
+40 threads
+
+|===
+|Rows |Threads |Minimum |Maximum |Average |Stddev |P25 |P50 |P75 |P95
+
+|100000
+|40
+|1.9313e+05
+|3.0614e+08
+|6.7483e+05
+|5.7616e+06
+|2.9862e+05
+|5.5047e+05
+|7.2332e+05
+|8.8749e+05
+
+|1000000
+|40
+|1.8682e+05
+|1.0958e+09
+|6.2070e+05
+|7.5455e+06
+|3.0250e+05
+|4.5701e+05
+|7.1302e+05
+|848559
+
+|2000000
+|40
+|1.8657e+05
+|3.4256e+08
+|5.7481e+05
+|2.8912e+06
+|3.0447e+05
+|4.5320e+05
+|7.1800e+05
+|8.5270e+05
+
+|5000000
+|40
+|1.9004e+05
+|7.9800e+08
+|5.7884e+05
+|3.6778e+06
+|3.0438e+05
+|4.5263e+05
+|7.1784e+05
+|8.5282e+05
+
+|10000000
+|40
+|1.8670e+05
+|4.8812e+09
+|6.3933e+05
+|1.0991e+07
+|3.0586e+05
+|4.5673e+05
+|7.1017e+05
+|846849
+|===
+
+=== PostgreSQL
+[source]
+10 threads
+
+|===
+|Rows |Threads |Minimum |Maximum |Average |Stddev |P25 |P50 |P75 |P95
+
+|100000
+|10
+|2.5326e+05
+|2.0482e+07
+|4.1204e+05
+|3.4557e+05
+|3.5005e+05
+|3.8321e+05
+|4.2048e+05
+|4.8552e+05
+
+|1000000
+|10
+|2.5595e+05
+|3.9923e+08
+|4.2898e+05
+|1.3438e+06
+|3.5369e+05
+|3.8850e+05
+|4.2525e+05
+|4.8428e+05
+
+|2000000
+|10
+|2.5408e+05
+|1.5020e+08
+|4.1715e+05
+|5.6816e+05
+|3.5329e+05
+|3.8716e+05
+|4.2278e+05
+|477627
+
+|5000000
+|10
+|2.5543e+05
+|4.5900e+08
+|4.2114e+05
+|9.3998e+05
+|3.5311e+05
+|3.8732e+05
+|4.2313e+05
+|479490
+
+|10000000
+|10
+|2.5526e+05
+|1.7896e+09
+|4.5150e+05
+|2.9971e+06
+|3.6183e+05
+|3.9780e+05
+|4.3451e+05
+|496718
+|===
+
+[source]
+20 threads
+
+|===
+|Rows |Threads |Minimum |Maximum |Average |Stddev |P25 |P50 |P75 |P95
+
+|100000
+|20
+|2.5663e+05
+|2.8358e+07
+|4.6805e+05
+|6.1783e+05
+|3.8590e+05
+|4.2763e+05
+|4.6361e+05
+|547916
+
+|1000000
+|20
+|2.6052e+05
+|1.8244e+08
+|4.7908e+05
+|1.4306e+06
+|3.9327e+05
+|4.3183e+05
+|4.6433e+05
+|523723
+
+|2000000
+|20
+|2.6028e+05
+|3.2566e+08
+|4.8356e+05
+|1.3254e+06
+|3.9197e+05
+|4.3043e+05
+|4.6365e+05
+|528478
+
+|5000000
+|20
+|2.5239e+05
+|1.1326e+09
+|4.8533e+05
+|3.0964e+06
+|3.9316e+05
+|4.3249e+05
+|4.6593e+05
+|526936
+
+|10000000
+|20
+|2.5523e+05
+|1.8875e+09
+|5.5376e+05
+|5.2644e+06
+|4.0171e+05
+|4.4230e+05
+|4.7905e+05
+|556850
+|===
+
+[source]
+30 threads
+
+|===
+|Rows |Threads |Minimum |Maximum |Average |Stddev |P25 |P50 |P75 |P95
+
+|100000
+|30
+|2.6274e+05
+|2.6665e+07
+|5.1779e+05
+|6.6173e+05
+|4.1960e+05
+|4.5944e+05
+|4.9930e+05
+|596578
+
+|1000000
+|30
+|2.6096e+05
+|1.8411e+08
+|5.1995e+05
+|1.3624e+06
+|4.2350e+05
+|4.5905e+05
+|4.9351e+05
+|567106
+
+|2000000
+|30
+|2.5615e+05
+|3.2854e+08
+|5.1702e+05
+|1.5525e+06
+|4.1972e+05
+|4.5455e+05
+|4.8793e+05
+|560281
+
+|5000000
+|30
+|2.5799e+05
+|4.2046e+08
+|5.4676e+05
+|2.8525e+06
+|4.2498e+05
+|4.6099e+05
+|4.9600e+05
+|5.7708e+05
+
+|10000000
+|30
+|2.6115e+05
+|1.8917e+09
+|6.5646e+05
+|8.4979e+06
+|4.2900e+05
+|4.6605e+05
+|5.0397e+05
+|603309
+|===
+
+
+[source]
+40 threads
+
+|===
+|Rows |Threads |Minimum |Maximum |Average |Stddev |P25 |P50 |P75 |P95
+
+|100000
+|40
+|2.6186e+05
+|6.2462e+07
+|6.3451e+05
+|1.6674e+06
+|4.4546e+05
+|4.9065e+05
+|5.4423e+05
+|1281444
+
+|1000000
+|40
+|2.5693e+05
+|2.8967e+08
+|5.7533e+05
+|2.4579e+06
+|4.3840e+05
+|4.7499e+05
+|5.1476e+05
+|630317
+
+|2000000
+|40
+|2.6060e+05
+|3.8883e+08
+|5.6656e+05
+|2.5558e+06
+|4.3654e+05
+|4.7299e+05
+|5.1189e+05
+|6.2173e+05
+
+|5000000
+|40
+|2.6069e+05
+|1.0912e+09
+|6.1496e+05
+|5.8926e+06
+|4.3937e+05
+|4.7565e+05
+|5.1574e+05
+|6.4566e+05
+
+|10000000
+|40
+|2.6034e+05
+|2.0557e+09
+|7.3036e+05
+|9.6943e+06
+|4.4390e+05
+|4.8062e+05
+|5.2252e+05
+|6.7449e+05
+|===
+
+=== Comparative analysis of Ignite and Postgres Performance.
+
+The tables below present Ignite performance as a percentage of Postgres latencies (ignite time / postgres time * 100)
+
+|===
+|Rows |Threads |Minimum |Maximum |Average |Stddev |P25 |P50 |P75 |P95
+|100000
+|10
+|   79.7204
+| 1184.7964
+|  148.0269
+| 1040.8890
+|   93.1067
+|  128.1543
+|  158.6877
+|  166.0127
+
+|1000000
+|10
+|   74.4247
+|  117.0328
+|  145.6338
+|  308.0964
+|   88.0460
+|  106.7568
+|  153.8859
+|  160.4679
+
+|2000000
+|10
+|   75.1732
+| 1925.5659
+|  125.5112
+| 1214.6050
+|   88.7316
+|  107.1108
+|  154.9198
+|  161.8439
+
+|5000000
+|10
+|   73.8950
+|  233.8780
+|  122.7003
+|  261.5694
+|   88.5985
+|  106.6560
+|  154.1063
+|  160.6524
+
+|10000000
+|10
+|   73.9481
+|   57.6889
+|  118.7575
+|   93.7873
+|   87.0906
+|  104.6757
+|  150.5627
+|  155.7042
+|===
+
+|===
+|Rows |Threads |Minimum |Maximum |Average |Stddev |P25 |P50 |P75 |P95
+|100000
+|20
+|   73.6001
+|  939.2059
+|  117.4404
+|  603.6126
+|   75.3822
+|   94.9629
+|  143.8947
+|  148.1822
+
+|1000000
+|20
+|   72.5280
+|  138.7470
+|  107.7273
+|  173.0183
+|   73.5525
+|   90.5912
+|  141.8862
+|  152.0460
+
+|2000000
+|20
+|   70.9620
+|   70.1713
+|  106.6031
+|  158.3673
+|   74.3654
+|   91.2715
+|  142.6701
+|  151.1056
+
+|5000000
+|20
+|   74.2224
+|   96.0004
+|  114.8105
+|  128.0487
+|   75.0229
+|   91.3709
+|  142.6201
+|  152.0164
+
+|10000000
+|20
+|   72.3935
+|   63.8305
+|   98.6276
+|   71.4402
+|   73.0029
+|   89.0685
+|  137.8290
+|  142.9706
+|===
+
+|===
+|Rows |Threads |Minimum |Maximum |Average |Stddev |P25 |P50 |P75 |P95
+|100000
+|30
+|   73.3044
+|  802.3626
+|  109.7820
+|  522.7963
+|   69.0610
+|   92.7063
+|  137.0138
+|  137.7361
+
+|1000000
+|30
+|   72.0302
+|  188.6644
+|  103.4715
+|  200.5945
+|   68.8524
+|   86.5439
+|  138.6659
+|  143.8271
+
+|2000000
+|30
+|   70.8686
+|   80.3859
+|  105.1565
+|  176.3865
+|   69.9752
+|   87.6449
+|  140.7579
+|  145.8327
+
+|5000000
+|30
+|   72.4989
+|  115.1667
+|  102.2880
+|  117.0622
+|   69.0385
+|   86.7806
+|  137.3992
+|  140.7838
+
+|10000000
+|30
+|   65.1082
+|  362.5311
+|   92.4230
+|  161.0751
+|   67.8695
+|   85.5552
+|  134.1250
+|  133.8100
+|===
+
+|===
+|Rows |Threads |Minimum |Maximum |Average |Stddev |P25 |P50 |P75 |P95
+|100000
+|40
+|   73.7532
+|  490.1220
+|  106.3545
+|  345.5440
+|   67.0363
+|  112.1920
+|  132.9070
+|   69.2570
+
+|1000000
+|40
+|   72.7124
+|  378.2925
+|  107.8859
+|  306.9897
+|   69.0009
+|   96.2147
+|  138.5150
+|  134.6242
+
+|2000000
+|40
+|   71.5925
+|   88.1002
+|  101.4562
+|  113.1231
+|   69.7462
+|   95.8160
+|  140.2645
+|  137.1496
+
+|5000000
+|40
+|   72.8988
+|   73.1305
+|   94.1264
+|   62.4139
+|   69.2765
+|   95.1603
+|  139.1864
+|  132.0850
+
+|10000000
+|40
+|   71.7139
+|  237.4471
+|   87.5363
+|  113.3759
+|   68.9029
+|   95.0293
+|  135.9125
+|  125.5540
+|===
+
+=== Comparative latency plots by number of threads
+These plots are drawn per thread by varying the number of rows handled by each thread.
+
+image::10-thr-lat.png[10_threads,880]
+
+image::20-thr-lat.png[20_threads,880]
+
+image::30-thr-lat.png[30_threads,880]
+
+image::40-thr-lat.png[40_threads,880]
+
+=== Conclusion
+PostgreSQL is overall better, P95 latency and all other timings being faster by at least 30% in most runs, barring a few abnormalities. Iginte does better than Postgres in 69 out of 200 measurement samples, but even in these cases the standard deviation of latency is better with PostgreSQL (except in two are three cases where PostgreSQL has stalled for a while).
+
+=== Running the benchmark
+The benchmark is a self-contained standalone java application. It is invoked by runbm.sh for a single run, or runloop.sh for multiple runs. runbm.sh and runloop.sh accept same command line arguments as the benchmark program itself, but they are slightly more convenient than running the jar file by itself.
+runbm.sh provides a help message when invoked with -h command line argument. The benchmark can be used to test any table, and it can generate the data depending based on the table definition.
+runbm.sh, runloop.sh, latencyplot2d.sh, makeplot.sh are in scripts directory of the alcor-pref root. Plotting requires GNUplot utility.
+
+=== Syntax of AlcorJdbcBenchmark
+[source,text]
+    [-h] -d datasource_name [-s schema_file] [-i indelim] [-o outdelim]
+    [-n numrec] [-m] [-b batch_size] [-u url] [-U username] [-p password]
+    [-N] [-w numworkers] [-u url] [-H hostip ] [-P port] [-D database_name]
+    [-v] [tablename1 tablename2 ...]
+
+    -h              : Print the help and exit
+    -s schema_file  : contains the table definition (present limitation, one file
+                      per table. If absent, looks for <tablenameN>_<datasource>_create_ddl.sql
+                      One of schema_file or tablenameN must be supplied.
+                      The top three lines specify, column name, types, and sizes
+                      name line should be prefixed with --CNL
+                      type line should be prefixed with --CTL
+                      size line should be prefixed with --CLL
+                      types are ALCOR value types if they are not natively supported by
+                      the datastore, at present they are:
+                       string      -> pure lower case US-ASCII strings, correspond to JSON
+                                      string and SQL VARCHAR
+                       string(L)   -> pure lower case US-ASCII strings, correspond to JSON
+                                      string and SQL CHAR(L)
+                       ip          -> Random pick from IPv4 or IPV6 value
+                       ipv4        -> IPv4 value
+                       ipv6        -> IPv6 value
+                       int         -> JSON/SQL integer value
+    -i indelim  : input delimiter character on name, type and size lines,
+                  defaults to whitespace
+    -o outdelim : output delimiter character in generated datafile,
+                  defaults to '|'
+    -n numrec   : number of data records to generate, defaults to DefNumRecs
+    -m          : do not write datafile, drive inserts with in memory records,
+                  defaults writing datafile, schema_file with last extension
+                  removed and .csv appended
+    -b batch_size : Use batch/bulk inserts if supported, defaults to
+                    DefBatchSize. Not supported yet
+    -u url        : Use url as JDBC connection string, if given, this
+                    is used instead of <datasource>/<host>:<port>/dbname
+    -U username   : Database usernae, depending on the database, this
+                    may be optional
+    -p password   : Database user password (like username, conditional)
+    -w numWorkers : Number of worker threads
+    -N            : No DDL (don't create tables), default false,
+                    if given, DELETEs all rows before each run
+    -v            : Verbose output
+    tablename1 tablename2 ... : read definitions from datasource
+                    specific versions, tablenameN-datasource-ddl.sql,
+                    or generic tablenameN-ddl.sql, and query from
+                    datasource-dml.sql, or query-dml.sql, NOT supported yet
+
+Typically runbm.sh is invoked as follows:
+java -cp <classpath for postgres jdbc driver> -m -N -s nodeinfo-postgres-ddl.sql -d postgres -U <username> -p <password> -D <database name> -n 100000 -w 4 -u jdbc:postgresql://<host-ip>:5432/<databasename>
+
+or,
+
+java -cp <classpath for ignite jdbc driver> -s nodeinfo-ignite-ddl.sql -v -d ignite -u jdbc:ignite:thin://<host> -w 2 -n 10000
+
+Send the output to a logfile for post processing and collecting the timings and plotting.
+
+latencyplot2d.sh generates the plots shown in this document, but the latency data needs to be organized by the thread, i.e, collect different database latencies for each thread count into a separate file.
