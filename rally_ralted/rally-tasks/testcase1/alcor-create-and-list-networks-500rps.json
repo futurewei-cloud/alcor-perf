@@ -1,0 +1,50 @@
+{
+    "NeutronNetworks.create_and_list_networks": [
+        {
+            "args": {
+                "network_create_args": {
+                    "provider:network_type": "vxlan"
+                }
+            },
+            "runner": {
+                "type": "rps",
+                "times": 2000,
+                "rps": 500,
+                "timeout": 100
+            },
+            "context": {
+                "users": {
+                    "tenants": 3,
+                    "users_per_tenant": 3
+                },
+                "roles": ["admin"]
+            },
+            "sla": {
+                "failure_rate": {
+                    "max": 0
+                }
+            }
+        },
+        {
+            "args": {
+                "network_create_args": {}
+            },
+            "runner": {
+                "type": "rps",
+                "times": 2000,
+                "rps": 500
+            },
+            "context": {
+                "users": {
+                    "tenants": 3,
+                    "users_per_tenant": 3
+                }
+            },
+            "sla": {
+                "failure_rate": {
+                    "max": 0
+                }
+            }
+        }
+    ]
+}

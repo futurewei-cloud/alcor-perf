@@ -1,0 +1,105 @@
+{
+    "NeutronNetworks.create_and_list_ports": [
+        {
+            "args": {
+                "network_create_args": {},
+                "port_create_args": {},
+                "ports_per_network": 10
+            },
+            "runner": {
+                "type": "rps",
+                "times": 600,
+                "rps": 300
+            },
+            "context": {
+                "network": {
+                    "network_create_args": {},
+                    "subnets_per_network": 1,
+                    "start_cidr": "10.2.0.0/16",
+                    "networks_per_tenant": 1
+                },
+                "users": {
+                    "tenants": 3,
+                    "users_per_tenant": 3,
+                    "project_domain": "default",
+                    "user_choice_method": "random",
+                    "user_domain": "default",
+                    "resource_management_workers": 20
+                }
+            },
+            "sla": {
+                "failure_rate": {
+                    "max": 0
+                }
+            }
+        }
+    ],
+    "NeutronNetworks.create_and_delete_ports": [
+        {
+            "args": {
+                "network_create_args": {},
+                "port_create_args": {},
+                "ports_per_network": 10
+            },
+            "runner": {
+                "type": "rps",
+                "times": 600,
+                "rps": 300
+            },
+            "context": {
+                "network": {
+                    "network_create_args": {},
+                    "subnets_per_network": 1,
+                    "start_cidr": "10.2.0.0/16",
+                    "networks_per_tenant": 1
+                },
+                "users": {
+                    "tenants": 3,
+                    "users_per_tenant": 3
+                }
+            },
+            "sla": {
+                "failure_rate": {
+                    "max": 0
+                }
+            }
+        }
+    ],
+    "NeutronNetworks.create_and_update_ports": [
+        {
+            "args": {
+                "network_create_args": {},
+                "port_create_args": {},
+                "port_update_args": {
+                    "admin_state_up": false,
+                    "device_id": "dummy_id",
+                    "device_owner": "dummy_owner",
+                    "name": "_port_updated"
+                },
+                "ports_per_network": 5
+            },
+            "runner": {
+                "type": "rps",
+                "times": 600,
+                "rps": 300 
+            },
+            "context": {
+                "network": {
+                    "network_create_args": {},
+                    "subnets_per_network": 1,
+                    "start_cidr": "10.2.0.0/16",
+                    "networks_per_tenant": 1
+                },
+                "users": {
+                    "tenants": 2,
+                    "users_per_tenant": 3
+                }
+            },
+            "sla": {
+                "failure_rate": {
+                    "max": 0
+                }
+            }
+        }
+    ]
+}
