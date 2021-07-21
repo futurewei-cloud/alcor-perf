@@ -1,0 +1,38 @@
+{
+  "NovaServers.boot_and_delete_multiple_servers": [
+    {
+      "runner": {
+        "type": "constant",
+        "concurrency": 1,
+        "times": 1
+      },
+      "args": {
+        "count": 10,
+        "image": {
+          "name": "cirros-healthcheck"
+        },
+        "flavor": {
+          "name": "m1.tiny"
+        }
+      },
+      "context": {
+        "users": {
+          "users_per_tenant": 1,
+          "tenants": 1
+        },
+        "quotas": {
+          "nova": {
+            "instances": -1,
+            "cores": -1,
+            "ram": -1
+          }
+        }
+      },
+      "sla": {
+         "failure_rate": {
+           "max": 0
+         }
+      }
+    }
+  ]
+}

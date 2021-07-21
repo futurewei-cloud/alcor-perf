@@ -1,0 +1,40 @@
+{
+    "NeutronPerformancePlugin.neutron_network_scalability": [
+        {
+            "args": {
+                "flavor": {
+                    "name": "m1.small"
+                },
+                "image": {
+                    "name": "cirros-healthcheck"
+                },
+                "number_of_networks": 1, 
+                "instances_per_network": 10,
+                "ports_per_instance": 10
+            }, 
+            "runner": {
+                "type": "constant",
+                "times": 10,
+                "concurrency": 5 
+            },
+            "sla": {
+                "failure_rate": {
+                    "max": 0
+                }
+            },
+            "context": {
+                "users": {
+                    "users_per_tenant": 1,
+                    "tenants": 1
+                },
+                "quotas": {
+                    "nova": {
+                        "instances": -1,
+                        "cores": -1,
+                        "ram": -1
+                    }
+                }
+            }
+        }
+    ]
+}

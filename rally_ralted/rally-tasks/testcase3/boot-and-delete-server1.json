@@ -1,0 +1,62 @@
+{
+    "NeutronPerformancePlugin.neutron_network_scalability": [
+        {
+            "args": {
+                "flavor": {
+                    "name": "m1.tiny"
+                },
+                "image": {
+                    "name": "cirros-healthcheck"
+                },
+                "force_delete": false
+            },
+            "runner": {
+                "type": "constant",
+                "times": 1,
+                "concurrency": 1
+            },
+            "sla": {
+                "failure_rate": {
+                    "max": 0
+                }
+            },
+            "context": {
+                "users": {
+                    "users_per_tenant": 2,
+                    "tenants": 3
+                }
+            }
+        },
+        {
+            "args": {
+                "flavor": {
+                    "name": "m1.tiny"
+                },
+                "image": {
+                    "name": "cirros-healthcheck"
+                },
+                "auto_assign_nic": true
+            },
+            "runner": {
+                "type": "constant",
+                "times": 1,
+                "concurrency": 1
+            },
+            "sla": {
+                "failure_rate": {
+                    "max": 0
+                }
+            },
+            "context": {
+                "users": {
+                    "users_per_tenant": 2,
+                    "tenants": 3
+                },
+                "network": {
+                    "start_cidr": "10.2.0.0/24",
+                    "networks_per_tenant": 2
+                }
+            }
+        }
+    ]
+}

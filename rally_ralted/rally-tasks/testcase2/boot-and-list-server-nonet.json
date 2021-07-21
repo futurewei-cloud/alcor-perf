@@ -1,0 +1,41 @@
+{
+    "NovaServers.boot_and_list_server": [
+        {
+            "args": {
+                "flavor": {
+                    "name": "m1.tiny"
+                },
+                "image": {
+                    "name": "cirros-healthcheck"
+                },
+                "auto_assign_nic": true
+            },
+            "runner": {
+                "type": "constant",
+                "times": 1,
+                "concurrency": 1
+            },
+            "sla": {
+                "failure_rate": {
+                    "max": 0
+                }
+            },
+            "context": {
+                "users": {
+                    "users_per_tenant": 2,
+                    "tenants": 3
+                },
+                "quotas": {
+                    "nova": {
+                       "instances": -1
+                    },
+                    "neutron": {
+                       "network": -1,
+                       "subnet": -1,
+                       "port": -1
+                    }
+                }
+            }
+        }
+    ]
+}

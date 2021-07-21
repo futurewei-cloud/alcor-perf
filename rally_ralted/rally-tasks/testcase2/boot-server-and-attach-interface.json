@@ -1,0 +1,35 @@
+{
+    "NovaServers.boot_server_and_attach_interface": [
+        {
+            "args": {
+                "flavor": {
+                    "name": "m1.tiny"
+                },
+                "image": {
+                    "name": "cirros-healthcheck"
+                },
+                "network_create_args": {},
+                "subnet_create_args": {},
+                "subnet_cidr_start": "1.1.0.0/24",
+                "boot_server_args": {}
+            },
+            "runner": {
+                "type": "constant",
+                "times": 1,
+                "concurrency": 1
+            },
+            "sla": {
+                "failure_rate": {
+                    "max": 0
+                }
+            },
+            "context": {
+                "network": {},
+                "users": {
+                    "users_per_tenant": 2,
+                    "tenants": 3
+                }
+            }
+        }
+    ]
+}

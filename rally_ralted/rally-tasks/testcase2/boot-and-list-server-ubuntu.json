@@ -1,0 +1,45 @@
+{
+    "NovaServers.boot_and_list_server": [
+        {
+            "args": {
+                "flavor": {
+                    "name": "m1.small"
+                },
+                "image": {
+                    "name": "ubuntu18.04"
+                },
+                "auto_assign_nic": true
+            },
+            "runner": {
+                "type": "constant",
+                "times": 1,
+                "concurrency": 1
+            },
+            "sla": {
+                "failure_rate": {
+                    "max": 0
+                }
+            },
+            "context": {
+                "users": {
+                    "users_per_tenant": 1,
+                    "tenants": 1
+                },
+                "network": {
+                    "start_cidr": "10.2.0.0/24",
+                    "networks_per_tenant": 2
+                },
+                "quotas": {
+                    "nova": {
+                       "instances": -1
+                    },
+                    "neutron": {
+                       "network": -1,
+                       "subnet": -1,
+                       "port": -1
+                    }
+                }
+            }
+        }
+    ]
+}
