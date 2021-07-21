@@ -66,3 +66,14 @@ git clone --recurse-submodules https://github.com/futurewei-cloud/alcor-control-
 
 cd alcor/build 
 ./aca-machine-init.sh
+
+
+# if aca do not work do the following:
+# in openvswitch_vswitchd container
+# kill -9 <aca process>
+ovs-vsctl del-br br-int && ovs-vsctl del-br br-tun
+
+# then exit container, restart all container on that host.
+# then get back into openvswitch_vswitchd container do:
+ovs-vsctl del-br br-int && ovs-vsctl del-br br-tun
+nohup /root/alcor-control-agent/build/bin/AlcorControlAgent -d >/dev/null </dev/null 2>&1 &
