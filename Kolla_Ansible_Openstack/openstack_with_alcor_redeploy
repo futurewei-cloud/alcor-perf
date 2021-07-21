@@ -62,7 +62,7 @@ apt install uuid
 apt-get install -y uuid-dev
 apt install wget
 
-git clone https://github.com/futurewei-cloud/alcor.git
+git clone --recurse-submodules https://github.com/futurewei-cloud/alcor-control-agent.git /root/alcor-control-agent
 
 cd alcor/build 
 ./aca-machine-init.sh
