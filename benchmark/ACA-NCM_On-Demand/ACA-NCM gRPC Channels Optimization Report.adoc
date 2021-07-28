@@ -68,7 +68,7 @@ Note: Some numbers are negative numbers, they are negative because we are trying
 === Comparative latencies among different testcases.
 These plots are drawn to compare the different kinds of latencies among different testcases, which have diffferent combination of optimizations.
 
-image: //insert ping latency graph here
+image::benchmark/ACA-NCM_On-Demand/image/ping_latency.png[ping_latency, 800]
 
 image: //insert on-demand request latency graph here
 
