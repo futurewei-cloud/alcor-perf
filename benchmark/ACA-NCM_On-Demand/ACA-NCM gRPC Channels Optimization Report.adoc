@@ -70,11 +70,13 @@ These plots are drawn to compare the different kinds of latencies among differen
 
 image::ping_latency.png[ping_latency, 800]
 
-image: //insert on-demand request latency graph here
+image::on_demand_request.png[on_demand_request, 800]
 
-image: //insert push GS latency graph here
+image::on_demand_reply.png[on_demand_reply, 800]
 
-image: //insert on-demand request latency graph here
+image::goalstate_pushdown.png[goalstate_pushdown, 800]
+
+
 
 === Conclusions
 . The change on ACA, which made its gRPC server asynchronous, significantly reduced the latencies here. We'd suggest that we should use asynchronous gRPC client/server as we could. In fact, the very first optimization on these gRPC channels are changing ACA's gRPC client from synchronous to asynchronous, but it was already some time ago, so that we didn't collect any data for comparison.
@@ -83,7 +85,7 @@ image: //insert on-demand request latency graph here
 . Opposite to the gRPC community's advice, we found that having n threads, and each thread has its own Completion Queue, didn't bring the best performance, see test case 42; on the other hand, when having less CQs, and having multiple threads pulling from them, brings better/best performance, see test case 38, 39 and 43.
 . We also compared the ping speeds with test cases with different number of ports, we found the ping speeds doesn't change a lot with the number of ports increasing, which means that the gRPC channels we have are at a quite optimized state. Please refer to the graph below.
 
-image: //insert ping speeds with different number of ports here.
+image::ping_latency_different_amount_ports.png[ping_latency_different_amount_ports, 800]
 
 == Running the test
 
