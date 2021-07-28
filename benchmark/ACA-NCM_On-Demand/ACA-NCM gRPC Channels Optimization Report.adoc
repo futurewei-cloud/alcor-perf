@@ -17,7 +17,7 @@ On the other hand, after receiving the 200 on-demand requests concurrently on it
 
 Back to the ACA, on one hand, its gRPC server receives the GoalStates and processes it; on the other hand, its on-demand engine receives that "OK" message, and waits for the corresponding GoalState to be received and programmed, after which it will release the corresponding packets, and the ping shall go through.
 
-// Insert picture here to demonstrate the workflow
+image::ncm_aca_test_setup_200_ports.png[ncm_aca_test_setup_200_ports, 800]
 
 == Different Kinds of Latencies
 The performance of the optimization are measured in the following kind of latencies:
