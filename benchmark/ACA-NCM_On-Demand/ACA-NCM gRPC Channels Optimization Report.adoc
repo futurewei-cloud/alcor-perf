@@ -1,0 +1,101 @@
+= ACA-NCM gRPC Channels Optimization Report
+:revnumber: v1.0
+:revdate: 2021 July 27
+:author: Rio Zhu
+:email: zzhu@futurewei.com
+
+:toc: right
+:imagesdir: images
+
+== Overview
+
+This document presents the results of running the on-demand workflow tests with Alcor-Control-Agent(ACA), and Network-Configuration-Manager(NCM), with Ignite as the cache layer of NCM. Different kinds of techniques were attempted, in order to reduced the different latencies in different gRPC channels.
+
+The following graph shows the overall on-demand workflow between ACA and NCM, the optimizations we have in both ACA and NCM and all the gRPC latencies with before/after data comparison.
+
+image::NCM_ACA_gRPC_Channels_Explained.png[channels_explained, 800]
+
+== Test Setup and Detailed Workflow
+
+This report focuses on the testcases where 200 ports will be created on the two physical nodes, where ACAs run, with node one having none of the neighbor information of ports on node two, and node two having all neighbor information of ports on node one. After the ports are created, and the corresponding GoalStates are pushed down to both ACAs, ports on node one will ping ports on node two at a concurrent manner, which triggers 200 concurrent on-demand requests, which are sent by ACA's gRPC client. 
+
+On the other hand, after receiving the 200 on-demand requests concurrently on its gRPC server, NCM will lookup GoalStates needed for these requests, and do two things concurrently: (1) Pushing down the GoalState to the requesting ACA with NCM's gRPC client; (2) Replies the requesting ACA with a simple message of "OK".
+
+Back to the ACA, on one hand, its gRPC server receives the GoalStates and processes it; on the other hand, its on-demand engine receives that "OK" message, and waits for the corresponding GoalState to be received and programmed, after which it will release the corresponding packets, and the ping shall go through.
+
+image::ncm_aca_test_setup_200_ports.png[ncm_aca_test_setup_200_ports, 800]
+
+== Different Kinds of Latencies
+The performance of the optimization are measured in the following kind of latencies:
+
+. Ping Speed(ms): The speed on one ping, in milliseconds, from a port on node one, to another port on node two.
+. ACA request sent to NCM request received time (ms): The gRPC latency, in milliseconds, from right after ACA sends out the on-demand request, to the time NCM receives that request.
+. NCM reply sent to ACA reply received time (ms): The gRPC latency, in milliseconds, from right after NCM sents on reply to the on-demand request, to the time ACA receives that reply.
+. NCM pushes goalstate to ACA receives goalstate (ms): The gRPC latency, in miliseconds, from right after NCM sends out the on-demand GoalState, which includes a subnet state, a VPC state, a port state(of the pinger) and a neighbor state(of the pingee), to the time when ACA receives that GoalState.
+
+The optimiztions are focuced on latency 2 - 4, but they all contribute to latency 1.
+
+== Different attempts of optimizations
+
+Different attempts of optimizations were applied, some brought improvements while others brought regressions. They will be listed below:
+
+. Larger RAM for Ignite & NCM: Allocating 40GB of RAM for NCM and 40GM of RAM for Ignite, to insure that they have sufficient RAM.
+. gRPC channel pool, one channel per host, on NCM: Rather than creating new gRPC channels every time NCM sends GoalState to an ACA, we implemented a gRPC channel pool on NCM. NCM has one gRPC channel per host(ACA), and it reuses the channel until it is disconnected.
+. gRPC channel stub pool: After the above change, we noticed that, when sending GoalStates, NCM takes about a few milliseconds to create a stub from a gRPC channel, so we decided to include this stub in the pool.
+. Manually setting gRPC channel options on ACA: In the seek of better performance of ACA's gRPC server, we tried to manually tweak some options on them, which includes setting the `GRPC_ARG_MAX_CONCURRENT_STREAMS`, the `SetMaxThreads` for gRPC server's resource quota, the `grpc_impl::ServerBuilder::SyncServerOption::NUM_CQS`, `grpc_impl::ServerBuilder::SyncServerOption::MAX_POLLERS` and `grpc_impl::ServerBuilder::SyncServerOption::MINE_POLLERS`.
+. Introducing thread-pool for ACA's on-demand engine: In the previous implementation, ACA's on-demand engine has *ONE* thread reading from its Completion Queue for on-demand reply, and it waits for the GoalState to be delivered and programmed, until it sends out the corresponding packet and reads from Completion Queue once again. This slowed down the receiving of next on-demand reply, which caused a bigger latency for latency 3. We then utilizes a thread-pool with the size of 32 to read from the Completion Queue, in the hope of decreasing the latency 3.
+. Introducing an async gRPC server on ACA, with thread pool of 16 threads reading from its Completion Queue: ACA had a synchrounous gRPC server for receiving GoalStates, although it has some kind of pooling(from the gRPC library itself) inside of it, it uses the same thread to read from its Completion Queue and processes the GoalState, until it reads the next one. In order to decrease the latency 4, we modified ACA's gRPC server so that it is now asynchronous. We uses it with another thread pool with size of 16 to process the GoalStates, so that the server thread can focus on receiving the next GoalState. Along with this change, the size of the on-demand engine also down-sized to 16 threads.
+. Configuration amounts for gRPC channels and warmups in NCM: We made NCM's gRPC connection pool configurable, so that user can define how many gRPC NCM has to each host; also, we added warmups for each gRPC channel, so that each channel, when created, sends an empty GoalState to the ACA, as a warmup.
+. Having multiple completion queues for ACA's gRPC server: Following the Performance Notes here (https://grpc.io/docs/guides/performance/), we tried to have thread_pool_size of CQs for ACA's gRPC server, to see what the performance will be, which results in one worker per CQ.
+. Having multiple CQs and multiple workers per CQ: We tried to have sqrt(thread_pool_size) of CQs for ACA's gRPC server, and each CQ has sqrt(thread_pool_size) reading from it, so that it has multiple CQs and each CQ can have multiple workers reading from it(in most cases).
+
+== Latency Data
+
+We analyze the log files of the Test Controller, the ACA that triggeers the on-demand requests, and the NCM, and get the following latency data. Different rows have different combination of optimizations used.
+
+Note: Some numbers are negative numbers, they are negative because we are trying to compare timestamps taken on different machines, and the clocks on them are not totally synchronized.
+
+[cols="1,7,3,1,1,1,3,1,1,1,3,1,1,1,3,1,1,1"]
+|===
+|Test Case No. |Optimization Combinations |Ping Speed (ms)| | | |ACA request sent to NCM request received time (ms)||||NCM reply sent to ACA reply received time (ms)||||NCM pushes goalstate to ACA receives goalstate (ms)| | |
+|0 |Optimizations |Min |Max|Avg.|Median |Min |Max|Avg.|Median |Min |Max|Avg.|Median |Min |Max|Avg.|Median
+|6 |Without optimization|75.046|524.238|255.136|239.9125|0|123|14.405|1|2|332|187.247|172|4|148|52.868|44
+|8 |Larger RAM on Ignite & NCM (40 GB each)  |131.235 |958.553 |486.542 |499.149 |-1 |254 |49.358 |1 |49 |721 |384.472 |384 |4 |242 |59.599 |37
+|9 |Larger RAM + NCM gRPC Channel Pool(size 1 per host) on NCM|139.222 |831.116 |414.048 |382.7165 |0 |185 |19.835 |1 |55 |611 |334.691 |348 |1 |287 |72.244 |29
+|10 |Larger RAM + NCM gRPC Channel + Stub Pool(size 1 per host) on NCM + Manually set gRPC channel options on ACA |96.481 |619.954 |305.141 |269.618 |0 |153 |16.14 |1 |39 |424 |237.995 |226 |1 |126 |32.561 |17.5
+|19 |Larger RAM + NCM gRPC Channel + Stub Pool(size 1 per host) on NCM + Manually set gRPC channel options on ACA |168.949 |797.177 |424.586 |411.126 |0 |217 |17.293 |1 |105 |600 |348 |367.5 |1 |166 |36.581 |30.5
+|24 |Larger RAM + NCM gRPC Channel + Stub Pool(size 1 per host) on NCM + Using thread pool(32 threads) for on-demand reply| 44.084 |375.179 |155.794 |135.528 |-2 |126 |7.759 |-1 |2 |67 |12.851 |5 |3 |122 |31.374 |21.5
+|38 |Larger RAM + NCM gRPC Channel + Stub Pool(size 1 per host) on NCM + Using thread pools(16 thread) for on-demand reply && async gRPC server with thread pool(16 threads) on ACA |39.563 |312.747 |119.011 |97.2235 |0 |41 |3.136 |1 |0 |23 |4.157 |1 |0 |138 |16.399 |2
+|39 |Larger RAM + NCM gRPC Channel + Stub Pool(size 10 per host) on NCM + Using thread pools(16 thread) for on-demand reply && async gRPC server with thread pool(16 threads) on ACA |35.189 |297.852 |115.405 |98.9735 |0 |29 |2.465 |1 |0 |31 |4.444 |1 |0 |81 |7.53 |1
+|42 |Larger RAM + NCM gRPC Channel + Stub Pool(size 16 per host) on NCM + Using thread pools(16 thread) for on-demand reply && async gRPC server with thread pool(16 threads), 16 Completion Queues(1 worker thread each) on ACA |25.082 |378.106 |141.386 |135.4355 |-1 |51 |2.179 |0 |1 |45 |10.847 |3 |1 |167 |16.621 |3
+|43|Larger RAM + NCM gRPC Channel + Stub Pool(size 16 per host) on NCM + Using thread pools(16 thread) for on-demand reply && async gRPC server with thread pool(16 threads), 4 Completion Queues(4 worker thread each) on ACA| 43.58 |225.5 |113.684 |112.875 |-3 |39 |0.704 |-2 |3 |54 |10.097 |6 |3 |49 |7.015 |4
+|===
+
+=== Comparative latencies among different testcases.
+These plots are drawn to compare the different kinds of latencies among different testcases, which have diffferent combination of optimizations.
+
+image::ping_latency.png[ping_latency, 800]
+
+image::on_demand_request.png[on_demand_request, 800]
+
+image::on_demand_reply.png[on_demand_reply, 800]
+
+image::goalstate_pushdown.png[goalstate_pushdown, 800]
+
+
+
+== Conclusions
+. The change on ACA, which made its gRPC server asynchronous, significantly reduced the latencies here. We'd suggest that we should use asynchronous gRPC client/server as we could. In fact, the very first optimization on these gRPC channels are changing ACA's gRPC client from synchronous to asynchronous, but it was already some time ago, so that we didn't collect any data for comparison.
+. Reusing gRPC channels can improve performance, which is what the gRPC community recommends(https://grpc.io/docs/guides/performance/).
+. Using multiple channels to the same server can improve performance, but it is not very significant, see test case 38 and 39 for comparison.
+. Opposite to the gRPC community's advice, we found that having n threads, and each thread has its own Completion Queue, didn't bring the best performance, see test case 42; on the other hand, when having less CQs, and having multiple threads pulling from them, brings better/best performance, see test case 38, 39 and 43.
+. We also compared the ping speeds with test cases with different number of ports, we found the ping speeds doesn't change a lot with the number of ports increasing, which means that the gRPC channels we have are at a quite optimized state. Please refer to the graph below.
+. On synchronous/asynchronous gRPC server/client: In the initial implementation, ACA has a synchronous gRPC server(to receive/process GoalStates) and a synchronous gRPC client(to send/receive on-demand requests/replies). This model has poor performance, as GoalState processing takes time, and each on-demand reply relies on a GoalState being processed, which makes the whole on-demand workflow blocking and sequential. To address this issue, we first made the gRPC client asynchronous, which means the client dispatches the received on-demand replies and proceeds to receive the next on-demand reply(if any). This change brought some good performance improvement. After more experiments, we found out that the synchronous gRPC server is also somehow blocking, even if the C++ gRPC library has some internal machanism to create a thread pool for a gRPC server. We realized that this is another bottleneck, so we decided to change the gRPC server to an asynchronous model, and it reduced the latency 4 to a very low level. Overall, the gRPc async API brings better performance, compared to the gRPC sync API, which is also mentioned in the gRPC Performance Best Practice(https://grpc.io/docs/guides/performance/).
+
+image::ping_latency_different_amount_ports.png[ping_latency_different_amount_ports, 800]
+
+== Running the test
+
+If you wish to run the test yourself, you shall utilize the Test Controller, which you can find here(https://github.com/futurewei-cloud/alcor/blob/master/services/pseudo_controller/src/main/java/com/futurewei/alcor/pseudo_controller/pseudo_controller.java) . Just running the Test Controller will only give you the ping speeds. In order to get all kinds of latencies, please utilize this script(https://github.com/futurewei-cloud/alcor-control-agent/blob/master/analyze.py) , along with the log files of Test Controller, ACA and NCM.
+
+
