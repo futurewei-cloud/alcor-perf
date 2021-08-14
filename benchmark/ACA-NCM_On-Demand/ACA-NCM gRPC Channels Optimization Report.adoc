@@ -2,14 +2,20 @@
 :revnumber: v1.0
 :revdate: 2021 July 27
 :author: Rio Zhu
-:email: zzhu@futurewei.com>
+:email: zzhu@futurewei.com
 
 :toc: right
 :imagesdir: images
 
 == Overview
 
-This document presents the results of running the on-demand workflow tests with Alcor-Control-Agent(ACA), and Network-Configuration-Manager(NCM), with Ignite as the cache layer of NCM.
+This document presents the results of running the on-demand workflow tests with Alcor-Control-Agent(ACA), and Network-Configuration-Manager(NCM), with Ignite as the cache layer of NCM. Different kinds of techniques were attempted, in order to reduced the different latencies in different gRPC channels.
+
+The following graph shows the overall on-demand workflow between ACA and NCM, the optimizations we have in both ACA and NCM and all the gRPC latencies with before/after data comparison.
+
+image::NCM_ACA_gRPC_Channels_Explained.png[channels_explained, 800]
+
+== Test Setup and Detailed Workflow
 
 This report focuses on the testcases where 200 ports will be created on the two physical nodes, where ACAs run, with node one having none of the neighbor information of ports on node two, and node two having all neighbor information of ports on node one. After the ports are created, and the corresponding GoalStates are pushed down to both ACAs, ports on node one will ping ports on node two at a concurrent manner, which triggers 200 concurrent on-demand requests, which are sent by ACA's gRPC client. 
 
@@ -29,9 +35,9 @@ The performance of the optimization are measured in the following kind of latenc
 
 The optimiztions are focuced on latency 2 - 4, but they all contribute to latency 1.
 
-== Different kinds of optimizations
+== Different attempts of optimizations
 
-Different kinds of optimizations were attempted, some brought improvements while others brought regressions. They will be listed below:
+Different attempts of optimizations were applied, some brought improvements while others brought regressions. They will be listed below:
 
 . Larger RAM for Ignite & NCM: Allocating 40GB of RAM for NCM and 40GM of RAM for Ignite, to insure that they have sufficient RAM.
 . gRPC channel pool, one channel per host, on NCM: Rather than creating new gRPC channels every time NCM sends GoalState to an ACA, we implemented a gRPC channel pool on NCM. NCM has one gRPC channel per host(ACA), and it reuses the channel until it is disconnected.
@@ -64,10 +70,6 @@ Note: Some numbers are negative numbers, they are negative because we are trying
 |42 |Larger RAM + NCM gRPC Channel + Stub Pool(size 16 per host) on NCM + Using thread pools(16 thread) for on-demand reply && async gRPC server with thread pool(16 threads), 16 Completion Queues(1 worker thread each) on ACA |25.082 |378.106 |141.386 |135.4355 |-1 |51 |2.179 |0 |1 |45 |10.847 |3 |1 |167 |16.621 |3
 |43|Larger RAM + NCM gRPC Channel + Stub Pool(size 16 per host) on NCM + Using thread pools(16 thread) for on-demand reply && async gRPC server with thread pool(16 threads), 4 Completion Queues(4 worker thread each) on ACA| 43.58 |225.5 |113.684 |112.875 |-3 |39 |0.704 |-2 |3 |54 |10.097 |6 |3 |49 |7.015 |4
 |===
-
-The following graph shows the on-demand workflow between ACA and NCM, the optimizations we have in both ACA and NCM and all the latencies with before/after data comparison.
-
-image::NCM_ACA_gRPC_Channels_Explained.png[channels_explained, 800]
 
 === Comparative latencies among different testcases.
 These plots are drawn to compare the different kinds of latencies among different testcases, which have diffferent combination of optimizations.
