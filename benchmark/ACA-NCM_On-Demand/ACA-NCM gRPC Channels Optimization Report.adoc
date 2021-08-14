@@ -65,6 +65,10 @@ Note: Some numbers are negative numbers, they are negative because we are trying
 |43|Larger RAM + NCM gRPC Channel + Stub Pool(size 16 per host) on NCM + Using thread pools(16 thread) for on-demand reply && async gRPC server with thread pool(16 threads), 4 Completion Queues(4 worker thread each) on ACA| 43.58 |225.5 |113.684 |112.875 |-3 |39 |0.704 |-2 |3 |54 |10.097 |6 |3 |49 |7.015 |4
 |===
 
+The following graph shows the on-demand workflow between ACA and NCM, the optimizations we have in both ACA and NCM and all the latencies with before/after data comparison.
+
+image::NCM_ACA_gRPC_Channels_Explained.png[channels_explained, 800]
+
 === Comparative latencies among different testcases.
 These plots are drawn to compare the different kinds of latencies among different testcases, which have diffferent combination of optimizations.
 
