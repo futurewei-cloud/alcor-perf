@@ -84,7 +84,7 @@ image::goalstate_pushdown.png[goalstate_pushdown, 800]
 
 
 
-=== Conclusions
+== Conclusions
 . The change on ACA, which made its gRPC server asynchronous, significantly reduced the latencies here. We'd suggest that we should use asynchronous gRPC client/server as we could. In fact, the very first optimization on these gRPC channels are changing ACA's gRPC client from synchronous to asynchronous, but it was already some time ago, so that we didn't collect any data for comparison.
 . Reusing gRPC channels can improve performance, which is what the gRPC community recommends(https://grpc.io/docs/guides/performance/).
 . Using multiple channels to the same server can improve performance, but it is not very significant, see test case 38 and 39 for comparison.
