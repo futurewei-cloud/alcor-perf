@@ -17,6 +17,6 @@ In the on-demand perforamnce report, we showed that we are able to get the desir
 
 When customer creates a compute instance, Alcor will send down a bunch of information, including the neighbors of this instance in the same VPC. The number of neighbor can be huge, it can reach up to 1 million. With such a huge information being sent to ACA, we need to make sure that ACA can handle it, in a timely manner.
 
-image::ncm_aca_test_setup_200_ports[scenario, 800]
+image::ncm_aca_test_setup_200_ports.png[scenario, 800]
 
 Let's revisit this test setup with 200 ports on each host. Say the customer has created a huge amount of neighbors before step 3, when the neighbor information that will be sent to ACA Node 2 will be huge.
