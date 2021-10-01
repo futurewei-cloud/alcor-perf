@@ -89,3 +89,36 @@ We can see that, with our optimizations on batching and logging, we achived ~ 10
 == One More Test
 
 In our privious tests, the kind of neighbor we've been testing are L2 neighbors, meaning that each neighbor will have one OVS rule installed. We would like to see how ACA performs when dealing with L3 neighbors, each of which will have two OVS rules installed. Will be time needed be doubled? With this doubt in mind, we modified the Test Controller, and performed the L3 neigbhor test. Here is what we got:
+
+|===
+|Local Ports|VPC Neigbhors|Total time processing neighbor states(ms)
+|20|200|33
+|20|1,000|113
+|20|5,000|279
+|20|10,000|567
+|20|50,000|2782
+|20|100,000|5396
+|20|500,000|27577
+|20|1,000,000|55460
+|===
+
+To our surprise, it didn't take double of the time, but almost the same amount of time. We think that's because the OVS driver layer refactor make the OVS programmer concurrent and very fast, that's why the L2 and L3 neighbor tests have very similar performances.
+
+== Conclusions
+
+The recent improvement done on ACA, which includes batch processing of resource states, eliminating a lot of timestamp collectings and elapsed time calculations, and improving ACA's logging machanism, enabled ACA to process resource states of a VPC neighborhood in a timely manner. Below is a graph for comparison between performances before, during and after optimizations:
+
+image::neighbor_state_processing_performance_comparison.png[performance_comparison, 800]
+
+
+== Future Improvements
+
+With what we've learnt during this round of optimizations, we have the following future improvements:
+
+. We need to have a better way to handle multi-threading in ACA. Currently, each module that needs multi-threading has its own thread-pool/way to spawn new threads, we need to have a way to unify them, in order to prevent any chaos when number of threads gets high.
+. We need to improve our way of profiling. As mentioned above, we've been relying on timestamp collecting and logging the elapsed time to profile/identify bottlenecks in ACA, and in this round of optimization we already see the down side of it. A better way to profiling will be esseential for any future optimizations.
+. We should be able to achieve better performance for resource state processing. We did some more experiments and we found out that, when testing with 1 million neighbors, the time spent on the OVS programming(the under layer) is actually very small, compared with the stime spent in other places in ACA(the upper layer). In one test, we saw that ACA took ~ 50 seconds to process the 1 million neighbor states, with the OVS programming code completely commented out. This result indicates that we have a lot of room to improve in the upper layer:
+
+image::upper_under_distrubution.png[uppper_under_distribution, 800]
+
+In order to understand why the upper layer is taking so much time, we need better understanding of the ACA. Major refactoring/redesign might be necesary for further optimizations.
