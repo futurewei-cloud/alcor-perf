@@ -13,10 +13,79 @@ As we keep on improving the Alcor-Control-Agent(ACA) to line up with the real-wo
 
 In the on-demand perforamnce report, we showed that we are able to get the desired neighbor information from the Network-Configuration-Manager(NCM), with very little latency. However, the ACA still faces other challenges, such as updating a large number of resources, in a very short time.
 
+One huge enabler of this optimization is the refactored ACA OVS Driver Refactor. ACA was only able to process ~ 500 concurrent OVS flow programming, and it crashes if the number gets high. This refactor provides us a reliable and faster way to programm OVS rules. For details, please visit the report for this refactoring(https://github.com/futurewei-cloud/alcor-perf/blob/master/benchmark/ACA_V2/ACA_ovs_driver_refactor_perf_report.pdf).
+
 == Scenario
 
 When customer creates a compute instance, Alcor will send down a bunch of information, including the neighbors of this instance in the same VPC. The number of neighbor can be huge, it can reach up to 1 million. With such a huge information being sent to ACA, we need to make sure that ACA can handle it, in a timely manner.
 
 image::ncm_aca_test_setup_200_ports.png[scenario, 800]
 
-Let's revisit this test setup with 200 ports on each host. Say the customer has created a huge amount of neighbors before step 3, when the neighbor information that will be sent to ACA Node 2 will be huge.
+Let's revisit this test setup with 200 ports on each host. Say the customer has created a huge amount of neighbors before step 3, then the neighbor information that will be sent to ACA Node 2 will be huge.
+
+== Test Setup and Workflow
+
+The test setup and workflow will be very similar with the one of the on-demand test. We still have the two ACA Nodes, NCM & Ignite Node and the Test Controller. However, the focus on this test will be focused on ACA Node 2, which will receive the entire neighbor information in step 3. There will be neither container creating at the beginning, nor any pings at the end of the test, we just create a lot of ports/neighbors and send those inforamtion from TC to NCM, and then from NCM to both ACAs.
+
+Also, we noticed that customer usually creates a smaller number of compute instances, compared to the size of the VPC neighborhood. So, we made changes to the Test Controller so that it can create different numbers of ports on each host. With that change, we can have a large number of ports on ACA Node 1 and a small number of port on ACA Node 2, thus ACA Node 2 will receive a large number of neighbor information in step 3, and keep its amount of local ports small, which is closer to the real-life scenario.
+
+== Performance before Optimization
+
+We tested the original ACA different sizes of VPC neighbors, and we got the following results:
+
+|===
+|Local Ports|VPC Neigbhors|Total time processing neighbor states(ms)
+|20|200|186
+|20|1,000|2284
+|20|5,000|13472
+|20|10,000|19760
+|20|50,000|stuck at ~ 32xxxth port/neighbor state
+|===
+
+== Investigation and Optimizations
+
+=== Enabling ACA to Process Huge Number of Resource States
+
+We found out that ACA stucks at processing 32xxxth resource state. After some investigation, we found out that it is because ACA hits the upper limit of threads it is allowed to be created. 
+
+To solve this problem, we introduced batch concurrent processing for resoruce states. We set the batch size to be 10,000(as this size is allowed based on the results above), and we divide a huge number of resource states into batches, and process each batch concurrently. This approach is kind of a mix of concurrent and sequential, ACA sequentially process each batch, and all the resource states in the same batch are processed concurrently.
+
+With this change we are able to test much bigger sizes of VPC neighbors, and the following are the results:
+
+|===
+|Local Ports|VPC Neigbhors|Total time processing neighbor states(ms)
+|20|200|171
+|20|1,000|574
+|20|5,000|2290
+|20|10,000|4453
+|20|50,000|21893
+|20|100,000|44300
+|20|500,000|246603
+|20|1,000,000|587553
+|===
+
+However, we later found out that there was a bug in our implementation, which made the whole processing sequential. We fixed that bug later, but we keep the above numbers, as a reference of sequential processing. Also, we confirmed that ACA is able to process 1 million resource states, but it is not fast.
+
+With the bug in the batch processing fixed, we tried to identify other bottlenecks in the original ACA. Our main tool was to record a lot of timestamps in different places of the code path, and we compute and print out the elapsed times for different section of the code path and we try to identify the bottlenecks based on the print out. We've been doing it since the on-demand optimization, and it worked well so far. However, we found out that not only this provides inaccurate information in some cases(we see different values for the same varialbe, without changing it in the code), but this intensive timestamp collection and logging will serverly slow down the ACA.
+
+To optimize this, we removed most of the timestamp collecting in the code path, and we changed the logging so that the DEBUG level messages, which makes up the majority of all logging messages, only get logged and printed out when the ACA's debug mode is on, and it stays quiet in other situaitons.
+
+With the above approaches combined, we performed out test again and we got the following numbers:
+
+|===
+|Local Ports|VPC Neigbhors|Total time processing neighbor states(ms)
+|20|200|14
+|20|1,000|112
+|20|5,000|261
+|20|10,000|534
+|20|50,000|2589
+|20|100,000|5195
+|20|500,000|26617
+|20|1,000,000|55369
+|===
+
+We can see that, with our optimizations on batching and logging, we achived ~ 10x performance improvement. It also shows that ACA is able to update 1 million neighbor states, within one minute.
+
+== One More Test
+
+In our privious tests, the kind of neighbor we've been testing are L2 neighbors, meaning that each neighbor will have one OVS rule installed. We would like to see how ACA performs when dealing with L3 neighbors, each of which will have two OVS rules installed. Will be time needed be doubled? With this doubt in mind, we modified the Test Controller, and performed the L3 neigbhor test. Here is what we got:
