@@ -1,0 +1,177 @@
+= ACA GoalState Processing Optimization Report
+:revnumber: v1.0
+:revdate: 2021 September 30
+:author: Rio Zhu
+:email: zzhu@futurewei.com
+
+:toc: right
+:imagesdir: images
+
+== Overview
+
+As we keep on improving the Alcor-Control-Agent(ACA) to line up with the real-world cloud sceniarios, such as huge VPC neighborhood and fast provisioning, speed has become our recent priority. 
+
+In the on-demand perforamnce report, we showed that we are able to get the desired neighbor information from the Network-Configuration-Manager(NCM), with very little latency. However, the ACA still faces other challenges, such as updating a large number of resources, in a very short time.
+
+One huge enabler of this optimization is the refactored ACA OVS Driver Refactor. ACA was only able to process ~ 500 concurrent OVS flow programming, and it crashes if the number gets high. This refactor provides us a reliable and faster way to programme OVS rules. For details, please visit the report regarding this refactoring(https://github.com/futurewei-cloud/alcor-perf/blob/master/benchmark/ACA_V2/ACA_ovs_driver_refactor_perf_report.pdf).
+
+== Scenario
+
+When customer creates a compute instance, Alcor will send down a bunch of network resource information, including the neighbors of this instance in the same VPC. The number of neighbor can be huge, it can reach up to 1 million. With such a huge information being sent to ACA, we need to make sure that ACA is able handle it in a timely manner.
+
+image::ncm_aca_test_setup_200_ports.png[scenario, 800]
+
+Let's revisit this test setup with 200 ports on each host. Say the customer has created a huge amount of neighbors before step 3, then the neighbor information that will be sent to ACA Node 2 will be huge.
+
+== Test Setup and Workflow
+
+The test setup and workflow will be very similar with the one of the on-demand test. We still have the two ACA Nodes, NCM & Ignite Node and the Test Controller. However, the focus on this test will be focused on ACA Node 2, which will receive the entire neighbor information in step 3. There will be neither container creating at the beginning, nor any pings at the end of the test, we just create a lot of ports/neighbors and send those inforamtion from TC to NCM, and then from NCM to both ACAs.
+
+Also, we noticed that customer usually creates a smaller number of VMs on the same compute node, compared to the size of the VPC neighborhood. So, we made changes to the Test Controller so that it can create different numbers of ports on each host. With that change, we can have a large number of ports on ACA Node 1 and a small number of port on ACA Node 2, thus ACA Node 2 will receive a large number of neighbor information in step 3, and keep its amount of local ports small, which is closer to the real-life scenario.
+
+== Performance before Optimization
+
+We tested the original ACA different sizes of VPC neighbors, and we got the following results:
+
+|===
+|Local Ports|VPC Neigbhors|Total time processing neighbor states(ms)
+|20|200|186
+|20|1,000|2,284
+|20|5,000|13,472
+|20|10,000|19,760
+|20|50,000|stuck at ~ 32xxxth port/neighbor state
+|===
+
+== Investigation and Optimizations
+
+=== Optimization One: Batch Resource Processing
+
+We noticed that ACA stucks at processing 32xxxth resource state. After some investigation, we found out that it is because ACA hits the upper limit of threads it is allowed to be created. Below is the original code block:
+
+....
+  for (auto &[neighbor_id, current_NeighborState] : parsed_struct.neighbor_states()) {
+    ACA_LOG_DEBUG("=====>parsing neighbor state: %s\n", neighbor_id.c_str());
+
+    workitem_future.push_back(std::async(
+            std::launch::async, &Aca_Goal_State_Handler::update_neighbor_state_workitem_v2,
+            this, current_NeighborState, std::ref(parsed_struct),
+            std::ref(gsOperationReply)));
+  }
+
+  for (int i = 0; i < parsed_struct.neighbor_states_size(); i++) {
+    rc = workitem_future[i].get();
+    if (rc != EXIT_SUCCESS)
+      overall_rc = rc;
+  }
+....
+
+In the above for loop, ACA spawns a new thread for each Neighbor State, and when the amount of neighbor states reachers the upper limit of threads it is allowed to be created(~ 32xxx), ACA gets stuck.
+
+To solve this problem, we introduced batch concurrent processing for resoruce states. We set the batch size to be 10,000(as this size is allowed based on the results above), and we divide a huge number of resource states into batches, and process each batch concurrently. This approach is kind of a mix of concurrent and sequential, ACA sequentially process each batch, and all the resource states in the same batch are processed concurrently.
+
+With this change we are able to test much bigger sizes of VPC neighbors, and the following are the results:
+
+|===
+|Local Ports|VPC Neigbhors|Total time processing neighbor states(ms)
+|20|200|171
+|20|1,000|574
+|20|5,000|2,290
+|20|10,000|4,453
+|20|50,000|21,893
+|20|100,000|44,300
+|20|500,000|246,603
+|20|1,000,000|587,553
+|===
+
+However, we later found out that there was a bug in our implementation, which made the whole processing sequential. We fixed that bug later, but we keep the above numbers, as a reference of sequential processing. Also, we confirmed that ACA is able to process 1 million resource states, but it is not fast. Below is the what the same piece of code looks like, after implementing batch processing correctly:
+
+....
+  int count = 1;
+
+  for (auto &[neighbor_id, current_NeighborState] : parsed_struct.neighbor_states()) {
+    ACA_LOG_DEBUG("=====>parsing neighbor state: %s\n", neighbor_id.c_str());
+
+    workitem_future.push_back(std::async(
+            std::launch::async, &Aca_Goal_State_Handler::update_neighbor_state_workitem_v2,
+            this, current_NeighborState, std::ref(parsed_struct),
+            std::ref(gsOperationReply)));
+    if (count % resource_state_processing_batch_size == 0) {
+      for (int i = 0 ; i < workitem_future.size(); i++){
+        rc = workitem_future[i].get();
+        if (rc != EXIT_SUCCESS){
+          overall_rc = rc;
+        }
+      }
+      workitem_future.clear();
+      count = 1;
+    } else {
+      count++;
+    }
+  }
+
+  for (int i = 0; i < workitem_future.size(); i++) {
+    rc = workitem_future[i].get();
+    if (rc != EXIT_SUCCESS)
+      overall_rc = rc;
+  }
+....
+
+=== Optimization Two: Parallel Processing with Logging Disabled
+
+With the bug in the batch processing fixed, we tried to identify other bottlenecks in the original ACA. Our main tool was to record a lot of timestamps in different places of the code path, and we compute and print out the elapsed times for different section of the code path and we try to identify the bottlenecks based on the print out. We've been doing it since the on-demand optimization, and it worked well so far. However, we found out that not only this provides inaccurate information in some cases(we see different values for the same varialbe, without changing it in the code), but this intensive timestamp collection and logging will serverly slow down the ACA.
+
+To optimize this, we removed most of the timestamp collecting in the code path, and we changed the logging so that the DEBUG level messages, which makes up the majority of all logging messages, only get logged and printed out when the ACA's debug mode is on, and it stays quiet in other situaitons.
+
+With the above approaches combined, we performed out test again and we got the following numbers:
+
+|===
+|Local Ports|VPC Neigbhors|Total time processing neighbor states(ms)
+|20|200|14
+|20|1,000|112
+|20|5,000|261
+|20|10,000|534
+|20|50,000|2,589
+|20|100,000|5,195
+|20|500,000|26,617
+|20|1,000,000|55,369
+|===
+
+We can see that, with our optimizations on batching and logging, we achived ~ 10x performance improvement. It also shows that ACA is able to update 1 million neighbor states, within one minute.
+
+== One More Test
+
+In our privious tests, the kind of neighbor we've been testing are L2 neighbors, meaning that each neighbor will have one OVS rule installed. We would like to see how ACA performs when dealing with L3 neighbors, each of which will have two OVS rules installed. Will be time needed be doubled? With this doubt in mind, we modified the Test Controller, and performed the L3 neigbhor test. Here is what we got:
+
+|===
+|Local Ports|VPC Neigbhors|Total time processing neighbor states(ms)
+|20|200|33
+|20|1,000|113
+|20|5,000|279
+|20|10,000|567
+|20|50,000|2,782
+|20|100,000|5,396
+|20|500,000|27,577
+|20|1,000,000|55,460
+|===
+
+To our surprise, it didn't take double of the time, but almost the same amount of time. We think that's because the OVS driver layer refactor make the OVS programmer concurrent and very fast, that's why the L2 and L3 neighbor tests have very similar performances.
+
+== Conclusions
+
+The recent round of optimization done on ACA, which includes batch processing of resource states, eliminating a lot of timestamp collectings and elapsed time calculations, and improving ACA's logging machanism, enabled ACA to process resource states of a VPC neighborhood in a timely manner. Below is a graph for comparison between performances before, during and after optimizations:
+
+image::neighbor_state_processing_performance_comparison.png[performance_comparison, 800]
+
+
+== Future Improvements
+
+With what we've learnt during this round of optimizations, we have the following future improvements:
+
+. Improve *multi-threading handling* in ACA. Currently, each module that needs multi-threading has its own thread-pool/way to spawn new threads, we need to have a way to unify them, in order to prevent any chaos when number of threads gets high.
+. Improving *performance profiling*. As mentioned above, we've been relying on timestamp collecting and logging the elapsed time to profile/identify bottlenecks in ACA, and in this round of optimization we already see the down side of it. A better way to profiling will be esseential for any future optimizations(e.g., in the OpenTracing/OpenTelemetry framework).
+. Improving *logging*. We found out that intensive logging will hurt the performance of ACA, especially when ACA is processing a large number of resource states. For now, we make the DEBUG loggings only print out when the debug mode is on, which contributes to a better performance, but also turned ACA into a 'black box', as we only know the result of an resource state update,  but not the process of it. There should be a better way to do this, so that we don't have to lose a lot of performance, but we can still know about some, if not all, about the update process.
+. Further *latency cutting*. We did some more experiments and we found out that, when testing with 1 million neighbors, the time spent on the OVS programming(the under layer) is actually very small, compared with the stime spent in other places in ACA(the upper layer). In one test, we saw that ACA took ~ 50 seconds to process the 1 million neighbor states, with the OVS programming code completely commented out. This result indicates that we have a lot of room to improve in the upper layer:
+
+image::upper_under_distrubution.png[uppper_under_distribution, 800]
+
+In order to understand why the upper layer is taking so much time, we need better understanding of the ACA. Major refactoring/redesign might be necesary for further optimizations.
