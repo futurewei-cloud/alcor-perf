@@ -1,0 +1,82 @@
+ignitepopstr contains the test harness to populate a cache.
+
+ignitewatchstr contains the test harness to use Ignite Watch feature.
+
+ignitewatchstr should be started first and one it is ready, start ignitepopstr.
+
+Run ignitepopstr with the following script:
+=== CUT ===
+user@master-node:~$ cat bin/run-ignitepopstr.sh                              
+#! /bin/sh                                                                   
+                                                                             
+if [ $# -lt 1 ]; then                                                        
+    echo "Need numrec [ignite address]"                                      
+    exit 1                                                                   
+fi                                                                           
+                                                                             
+NUMREC=$1                                                                    
+                                                                             
+if [ -n "$2" ]; then                                                         
+    IP="$2"                                                                  
+else                                                                         
+    IP=127.0.0.1                                                             
+fi                                                                           
+                                                                             
+mvn exec:java -D exec:java -D exec.mainClass=com.futurewei.work.ignitepopstr.IgnitePopStr -Dexec.args="$NUMREC $IP"
+=== CUT ===
+
+
+Run ignitewatchstr with the following script:
+=== CUT ===
+user@master-node:~$ cat bin/run-ignitewatchstr.sh 
+#! /bin/sh                                                                   
+                                                                             
+Usage="[-r] [-v] [-t] -q num_queries [-w num_workers] [-s serverIp]"         
+                                                                             
+DELDB=                                                                       
+VERBOSE=                                                                     
+TXN=                                                                         
+NUMQRY=0                                                                     
+NUMWRK=1                                                                     
+SRV=127.0.0.1                                                                
+                                                                             
+while [ -n "$1" ]; do                                                        
+    case $1 in                                                               
+        -r) DELDB="-r"                                                       
+            shift                                                            
+            ;;                                                               
+        -v) VERBOSE="-v"                                                     
+            shift                                                            
+            ;;                                                               
+        -q)                                                                  
+            shift                                                            
+            NUMQRY=$1                                                        
+            shift                                                            
+            ;;                                                               
+        -w)                                                                  
+            shift                                                            
+            NUMWRK=$1                                                        
+            shift                                                            
+            ;;                                                               
+        -s)                                                                  
+            shift                                                            
+            SRV=$1                                                           
+            shift                                                            
+            ;;                                                               
+                                                                             
+        -t)                                                                  
+            TXN="-t"                                                         
+            shift                                                            
+            ;;                                                               
+    esac                                                                     
+done                                                                         
+                                                                             
+if [ $NUMQRY -eq 0 ]; then                                                   
+    echo "Usage: `basename $0` $Usage"                                       
+    exit 1                                                                   
+fi                                                                           
+                                                                             
+mvn exec:java -D exec:java -D exec.mainClass=com.futurewei.work.ignitewatchstr.IgniteWatchStr -Dexec.args="$DELDB $VERBOSE $TXN -q $NUMQRY -w $NUMWRK -s $SRV"
+=== CUT ===
+
+
