@@ -47,7 +47,7 @@ The above latencies construct the overall latency of NCM's on-demand workflow.
 We analyze the log files of the Dubhe Agent and the NCM to get the following numbers.
 
 |===
-|||||||||Retrieve GSV2 from Ignite|||||||Send GSV2(ms)|||||||Reply on-demand(ms)||||||
+|||||||||Retrieve GSV2 from Ignite(ms)|||||||Send GSV2(ms)|||||||Reply on-demand(ms)||||||
 |Test #|# of VPCs|# of Ports/VPC|Total # of Ports|Max on-demand rate(NCM's QPS)|Requests Sent|Replies Received|GSV2 Received|Min|Max|Mean|Median(50%)|90%|95%|99%|Min|Max|Mean|Median(50%)|90%|95%|99%|Min|Max|Mean|Median(50%)|90%|95%|99%
 |1|1|100|100|700|35701|35614|35708|2|1627|376.544|245|1085|1180|1339|0|699|111.127|63|327|390.95|498|0|178|1.884|1|4|6|11
 |2|1|200|200|700|35701|34935|35124|4|1992|742.471|708|1375|1524|1717|0|826|193.697|171|387|452|562|0|309|2.817|2|5|8|17
@@ -84,9 +84,10 @@ image::ncm_stress_test_latencies_percentage.png[latencies_percentage, 800]
 
 == Conclusions
 
+. The maximum QPS we are able to achieve in this setup is 700~800 QPS, and we can see that we get the best QPS when there are less number of ports in a VPC.
 . The QPS of NCM dropps as the number of ports in a VPC increases. This is mainly because that Ignite takes more and more time to retrieve the data needed for a on-demand request, as the data of a VPC grows with the number of ports in this VPC.
 . With the same total number of ports in all VPCs, NCM's QPS grows with the number of VPCs. This is because with the number of total ports as a constant, the number of ports in each VPC decreases, as the number of VPC grows; also, when NCM retrieves the GoalStateV2 from Ignite, the data itself is partitioned by the `VNI` of a VPC. So, if there are less data in a VPC, the time for retrieving it is shorter.
-. The gRPC client that sends the on-demand GoalStateV2 to the host also contributes alot to the overall latency. We are able to find out that, the `onNext` function of the Java async gRPC library, which sends the message, can take a lot of time. To our understanding, the `onNext` not take that much time as it is a asynchronous and its main purpose is to put the message into a queue(https://github.com/grpc/grpc-java/issues/2247#issuecomment-245949881). Further investigation is needed to fully understand why it could take so much time, and how to prevent it.
+. The gRPC client that sends the on-demand GoalStateV2 to the host also contributes alot to the overall latency. We are able to find out that, the `onNext` function of the Java async gRPC library, which sends the message, can take a lot of time. To our understanding, the `onNext` not take that much time as it is a asynchronous and its main purpose is to put the message into a queue(https://github.com/grpc/grpc-java/issues/2247#issuecomment-245949881). Further investigation is needed to fully understand why it could take so much time, and how to prevent it. If we look closely to the Median(50%) column in the `Send GSV2(ms)` category, we can see that in multiple testcases, the median of sending the GoalStateV2 is 1 ms, which means there were half of the GoalStateV2s sent in 1 ms. This gives us hope and we believe that, if done right, 1ms should be the ideal time for sending on-demand GoalStateV2s.
 . On the other hand, the gRPC server that replies the on-demand requests are performing well. From the latencies charts, we can barely see it as its latency is so little.
 
 == Running the test
