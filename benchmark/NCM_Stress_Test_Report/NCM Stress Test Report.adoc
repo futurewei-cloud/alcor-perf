@@ -1,0 +1,105 @@
+= NCM Stress Test Report
+:revnumber: v1.0
+:revdate: 2022 January 28
+:author: Rio Zhu
+:email: zzhu@futurewei.com
+
+:toc: right
+:imagesdir: images
+
+== Overview
+
+This document presents the results of running on-demand stress tests against Network-Configuration-Manager(NCM), with Ignite as the cache layer of NCM. The reason of this test is to get a better understanding of how much on-demand requests can NCM handle in a certain amount of time.
+
+
+=== Test Setup and Detailed Workflow
+
+The following graph shows the setup and the workflow of this test.
+
+image::ncm_stress_test_setup.png[test_setup, 800]
+
+The test setup is very similar with our previous tests on the on-demand workflow. Except that we replced one of the Alcor-Control-Agent(ACA) on one of the nodes with the newly written Dubhe Agent, a prototype written in Golang that mimics the gRPC server/client ability of ACA. Of course, for the Test Controller, changes were made in order to support the multi-vpc test scenarios.
+
+At the beginning of the test, the Test Controller first generates the GoalStateV2 messages with the number of VPCs, and number of ports inside each VPC, and it sends those GoalStateV2s to NCM.
+
+NCM, after receiving and storing these GoalStateV2s into its cache, sends down the GoalStates to the host agents, which are the Dubhe agent on Node 1 and ACA on Node 2. 
+
+With the GoalStateV2 received, NCM now understands what VPCs and ports it has and what neighbors those ports have, and it is ready for begin the stress test. The user sets the duration of the test(in seconds) and the rate of sending on-demand requests(requests/second, we can call this number X) when the Dubhe agent starts, and test will be done according to these parameters.
+
+After the test, the Dubhe agent outputs the number of requests sent, the number of GoalStateV2 it received, and the number of on-demand replies it received. If these three numbers are at the same level, we would say that NCM is able to handle X number of on-demand requests per second, with this number of VPCs and ports in its cache.
+
+== Test Scenarios
+
+We tested NCM with different numbers of VPCs, and different number of ports inside each VPC.
+
+With the same number of VPCs and ports, we repeated the test with a increasing X, and we stopped when NCM is not able to handle the requests, and we call that NCM's max QPS is X with this amount of VPCs and ports in each VPC. When NCM is not able to handle a rate X, we can see from the Dubhe Agent that the GoalStateV2s and the on-demand replies received is clearly less (30% or more) than the on-demand requests sent.
+
+Afterwards, we try to test with different number of VPCs and ports, and see how NCM performs.
+
+Some limitations that these testcases have are 1) The testcases were done against only one NCM instance; 2) There are only two clients(the Dubhe Agent and the ACA) and only the Dubhe Agent triggers the on-demand workflow.
+
+== Major Latencies in NCM's on-demand Workflow
+The following are the three major latencies in NCM's on-demand workflow:
+
+. GoalStateV2 retrieving time(ms): The time that NCM takes to get the corresponding GoalStateV2 from its cache.
+. Send GoalStateV2 to host(ms): The time NCM's gRPC client take to send the GoalStateV2 to the requesting host.
+. On-demand reply time(ms): The time NCM's gRPC server takes to send the on-demand reply to the requesting host.
+
+The above latencies construct the overall latency of NCM's on-demand workflow.
+
+== Test Results
+
+We analyze the log files of the Dubhe Agent and the NCM to get the following numbers.
+
+|===
+|||||||||Retrieve GSV2 from Ignite(ms)|||||||Send GSV2(ms)|||||||Reply on-demand(ms)||||||
+|Test #|# of VPCs|# of Ports/VPC|Total # of Ports|Max on-demand rate(NCM's QPS)|Requests Sent|Replies Received|GSV2 Received|Min|Max|Mean|Median(50%)|90%|95%|99%|Min|Max|Mean|Median(50%)|90%|95%|99%|Min|Max|Mean|Median(50%)|90%|95%|99%
+|1|1|100|100|700|35701|35614|35708|2|1627|376.544|245|1085|1180|1339|0|699|111.127|63|327|390.95|498|0|178|1.884|1|4|6|11
+|2|1|200|200|700|35701|34935|35124|4|1992|742.471|708|1375|1524|1717|0|826|193.697|171|387|452|562|0|309|2.817|2|5|8|17
+|3|1|500|500|600|30601|30552|30607|3|1624|371.726|126|1101.2|1244|1401|0|840|78.785|26|231|287|407|0|235|1.593|1|3|4|11
+|4|1|1,000|1,000|500|25500|25443|25504|5|1690|450.965|351|1132|1276|1484|0|970|69.942|44|183|227|312|0|372|1.927|1|3|4|20
+|5|1|2,000|2,000|400|20401|20075|20153|11|3443|1170.446|1008|2304.9|3030|3274|0|768|147.063|121|319|384|491|0|907|3.773|2|6|10|51.59
+|6|1|5,000|5,000|175|8926|8904|8931|21|5828|1262.369|457.5|3773.1|4650.1|5482.62|0|529|64.125|8|211|249.7|338.74|0|258|2.359|1|4|6|32.81
+|7|1|10,000|10,000|75|3826|3813|3827|46|12579|2140.507|94|9030.5|10804.25|11444.85|0|273|27.369|1|116|147.7|189.74|0|232|1.565|0|3|5|25
+|8|10|100|1,000|700|35701|35620|35707|1|1588|355.683|162|1038|1163|1324|0|688|101.616|43|295|353.95|473|0|250|2.027|1|5|7|14
+|9|10|200|2,000|700|35701|35587|35708|2|1688|515.509|370|1224|1329|1485.04|0|816|136.784|90|341|400|515|0|233|2.571|1|6|9|16
+|10|10|500|5,000|600|30601|30551|30607|3|1191|151.856|6|494|592|887|0|539|33.545|1|10|144|259|0|127|1.017|0|3|3|6
+|11|10|1,000|10,000|500|25501|25433|25507|5|1893|359.489|143|998|1342.3|1693.06|0|798|60.509|21|174|252|344|0|409|1.504|1|3|4|11
+|12|20|50|1,000|700|35700|35632|35706|1|696|110.201|3|369|444|546|0|337|33.666|1|117|146|195|0|93|0.959|0|2|3|4
+|13|20|100|2,000|700|35701|35635|35708|1|1222|231.442|36|740.4|863|980|0|635|69.204|11|219|280|402|0|169|1.404|1|3|5|11
+|14|20|250|5,000|700|35701|35560|35707|2|1990|644.33|574|1406|1530|1733|0|990|168.052|137|379|440|551|0|228|2.999|2|7|9|20
+|15|20|500|10,000|600|30601|30545|30607|3|1337|287.438|94|934|1054|1175|0|721|62.178|19|199|246.95|331|0|273|1.472|1|3|4|10
+|16|50|20|1,000|750|38251|38107|38257|1|1748|452.316|339|1121|1261|1450|0|750|139.269|98|345|412|532|0|264|2.297|1|5|8|17
+|17|50|40|2,000|725|36976|36911|36983|1|1212|237.572|43|725|835|1021|0|598|72.619|14|224|278|377|0|191|1.623|1|3|5|14
+|18|50|100|5,000|725|36976|36849|36983|2|1518|401|269|1038|1145|1311.29|0|674|115.44|67|307|368|475|0|240|1.824|1|4|5|10
+|19|50|200|10,000|700|35701|35610|35708|2|1988|660.542|603|1376|1506|1665|0|804|175.172|146|381|441|545.99|0|366|2.899|2|6|9|17
+|===
+
+=== Comparative latencies among different testcases.
+The following graphs were plotted to show the trend of NCM's QPS among different test cases, and NCM's latencies in some of the test cases.
+
+image::ncm_stress_test_qps_trend.png[qps, 800]
+
+Note: There's no test performed for total number of ports less than 1000 when there are multiple VPCs, that's why the corresponding area of the above graph is empty.
+
+image::ncm_stress_test_latencies_ms.png[latencies_ms, 800]
+
+image::ncm_stress_test_latencies_percentage.png[latencies_percentage, 800]
+
+
+== Conclusions
+
+. The maximum QPS we are able to achieve in this setup is 700~800 QPS, and we can see that we get the best QPS when there are less number of ports in a VPC.
+. The QPS of NCM dropps as the number of ports in a VPC increases. This is mainly because that Ignite takes more and more time to retrieve the data needed for a on-demand request, as the data of a VPC grows with the number of ports in this VPC.
+. With the same total number of ports in all VPCs, NCM's QPS grows with the number of VPCs. This is because with the number of total ports as a constant, the number of ports in each VPC decreases, as the number of VPC grows; also, when NCM retrieves the GoalStateV2 from Ignite, the data itself is partitioned by the `VNI` of a VPC. So, if there are less data in a VPC, the time for retrieving it is shorter.
+. The gRPC client that sends the on-demand GoalStateV2 to the host also contributes alot to the overall latency. We are able to find out that, the `onNext` function of the Java async gRPC library, which sends the message, can take a lot of time. To our understanding, the `onNext` not take that much time as it is a asynchronous and its main purpose is to put the message into a queue(https://github.com/grpc/grpc-java/issues/2247#issuecomment-245949881). Further investigation is needed to fully understand why it could take so much time, and how to prevent it. If we look closely to the Median(50%) column in the `Send GSV2(ms)` category, we can see that in multiple testcases, the median of sending the GoalStateV2 is 1 ms, which means there were half of the GoalStateV2s sent in 1 ms. This gives us hope and we believe that, if done right, 1ms should be the ideal time for sending on-demand GoalStateV2s.
+. On the other hand, the gRPC server that replies the on-demand requests are performing well. From the latencies charts, we can barely see it as its latency is so little.
+
+== Running the test
+
+If you wish to run the test yourself, you shall utilize the Test Controller(https://github.com/futurewei-cloud/alcor/blob/master/services/pseudo_controller/src/main/java/com/futurewei/alcor/pseudo_controller/pseudo_controller.java), the Dhube Agent(https://github.com/futurewei-cloud/dubhe_agent) and the ACA(https://github.com/futurewei-cloud/alcor-control-agent/). If you would like to produce a table like the one in this page, you should also take a look at this script(https://github.com/futurewei-cloud/alcor-control-agent/blob/master/analyze.py).
+
+== Future Improvement
+. We'd like to improve the test by increasing the size of the NCM cluster, for example, from one NCM instance to five.
+. We'd like to improvee the test by increasing the number of agents that triggeres the on-demand workflow. This scenario is more close to the real-world scenario where there will be multiple agents sending on-demand requests at the same time.
+
