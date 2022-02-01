@@ -1,0 +1,27 @@
+---
+- hosts: nova_compute
+  tasks:
+    - name: Check if ACA is running
+      shell: pgrep AlcorControlAge
+      ignore_errors: yes 
+      changed_when: false
+      register: service_aca_status
+
+    - name: run ACA service
+      shell: nohup /root/alcor-control-agent/build/bin/AlcorControlAgent -a 10.213.43.251 -p 30014 >/dev/null </dev/null 2>&1 &
+      when: service_aca_status.rc != 0
+
+    - name: Check again if ACA is running
+      shell: pgrep AlcorControlAge
+      ignore_errors: yes
+      changed_when: false
+      register: service_aca_again_status
+
+    - name: Report status of ACA
+      fail:
+        msg: |
+          Service AlcorControlAge is not running.
+          Return code from `pgrep`:
+          {{ service_aca_again_status.rc }}
+      when: service_aca_again_status.rc != 0
+   

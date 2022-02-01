@@ -1,0 +1,30 @@
+---
+- hosts: nova_compute
+  tasks:
+    - name: Clone a github repository
+      git:
+        repo: https://github.com/futurewei-cloud/alcor-control-agent.git
+        dest: /root/alcor-control-agent
+        clone: yes
+        recursive: yes
+        update: yes 
+    
+    - name: deploy ACA
+      shell: /root/alcor-control-agent/build/aca-machine-init.sh delete-bridges
+      ignore_errors: yes
+      changed_when: false
+      register: deploy_aca_status
+
+    - name: Check if ACA is running
+      shell: pgrep AlcorControlAge
+      ignore_errors: yes
+      changed_when: false
+      register: service_aca_status
+
+    - name: Report status of ACA
+      fail:
+        msg: |
+          Service AlcorControlAge is not running.
+          Return code from `pgrep`:
+          {{ service_aca_status.rc }}
+      when: service_aca_status.rc != 0

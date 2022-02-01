@@ -1,0 +1,52 @@
+---
+- hosts: nova_compute
+  tasks:
+    - name: stop ACA
+      shell: ps ax | grep 'Alcor*' | awk -F ' ' '{print $1}' | xargs sudo kill -9 
+      ignore_errors: yes
+      changed_when: false
+    
+    - name: Check if ACA is running
+      shell: pgrep AlcorControlAge
+      ignore_errors: yes
+      changed_when: false
+      register: service_aca_status
+
+#    - name: Restart service openvswitch-switch, in all cases
+#      ansible.builtin.service:
+#        name: openvswitch-switch
+#        state: restarted
+
+    - name: Stop service openvswitch-switch, in all cases
+      ansible.builtin.service:
+        name: openvswitch-switch
+        state: stopped
+
+    - name: Start service openvswitch-switch, in all cases
+      ansible.builtin.service:
+        name: openvswitch-switch
+        state: started
+
+    - name: remove ovs bridges
+      shell: ovs-vsctl del-br br-int && ovs-vsctl del-br br-tun 
+      ignore_errors: yes
+      changed_when: false
+    
+    - name: run ACA service
+      shell: nohup /root/alcor-control-agent/build/bin/AlcorControlAgent -a 10.213.43.251 -p 30014 >/dev/null </dev/null 2>&1 &
+      when: service_aca_status.rc != 0
+
+    - name: Check again if ACA is running
+      shell: pgrep AlcorControlAge
+      ignore_errors: yes
+      changed_when: false
+      register: service_aca_again_status
+
+    - name: Report status of ACA
+      fail:
+        msg: |
+          Service AlcorControlAge is not running.
+          Return code from `pgrep`:
+          {{ service_aca_again_status.rc }}
+      when: service_aca_again_status.rc != 0
+   

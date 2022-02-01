@@ -1,0 +1,34 @@
+---
+- hosts: "nova_all:!nova_compute" 
+  tasks:
+#    - name: restart nova services 
+#      shell: |
+#        service nova-conductor restart 
+#        service nova-scheduler restart
+#        service nova-novncproxy restart
+#        service nova-api-os-compute restart
+#        service nova-api-metadata restart
+#      register: service_nova_status
+#
+#    - debug: var=service_nova_status.stdout_lines
+
+    - name: Restart service nova-conductor, in all cases
+      ansible.builtin.service:
+        name: nova-conductor
+        state: restarted
+    - name: Restart service nova-scheduler, in all cases
+      ansible.builtin.service:
+        name: nova-scheduler
+        state: restarted
+    - name: Restart service nova-novncproxy, in all cases
+      ansible.builtin.service:
+        name: nova-novncproxy
+        state: restarted
+    - name: Restart service nova-api-os-compute, in all cases
+      ansible.builtin.service:
+        name: nova-api-os-compute
+        state: restarted
+    - name: Restart service nova-api-metadata, in all cases
+      ansible.builtin.service:
+        name: nova-api-metadata
+        state: restarted
