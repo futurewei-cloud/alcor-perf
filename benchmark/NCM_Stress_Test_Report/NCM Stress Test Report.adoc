@@ -11,13 +11,12 @@
 
 This document presents the results of running on-demand stress tests against Network-Configuration-Manager(NCM), with Ignite as the cache layer of NCM. The reason of this test is to get a better understanding of how much on-demand requests can NCM handle in a certain amount of time.
 
+
+=== Test Setup and Detailed Workflow
+
 The following graph shows the setup and the workflow of this test.
 
-We tested NCM with different numbers of VPCs, and different number of ports inside each VPC.
-
 image::ncm_stress_test_setup.png[test_setup, 800]
-
-== Test Setup and Detailed Workflow
 
 The test setup is very similar with our previous tests on the on-demand workflow. Except that we replced one of the Alcor-Control-Agent(ACA) on one of the nodes with the newly written Dubhe Agent, a prototype written in Golang that mimics the gRPC server/client ability of ACA. Of course, for the Test Controller, changes were made in order to support the multi-vpc test scenarios.
 
@@ -29,9 +28,15 @@ With the GoalStateV2 received, NCM now understands what VPCs and ports it has an
 
 After the test, the Dubhe agent outputs the number of requests sent, the number of GoalStateV2 it received, and the number of on-demand replies it received. If these three numbers are at the same level, we would say that NCM is able to handle X number of on-demand requests per second, with this number of VPCs and ports in its cache.
 
-With the same number of VPCs and ports, we repeat the test with a increasing X, and we stop when NCM is not able to handle the requests, and we call that NCM's max QPS is X with this amount of VPCs and ports in each VPC.
+== Test Scenarios
+
+We tested NCM with different numbers of VPCs, and different number of ports inside each VPC.
+
+With the same number of VPCs and ports, we repeated the test with a increasing X, and we stopped when NCM is not able to handle the requests, and we call that NCM's max QPS is X with this amount of VPCs and ports in each VPC. When NCM is not able to handle a rate X, we can see from the Dubhe Agent that the GoalStateV2s and the on-demand replies received is clearly less (30% or more) than the on-demand requests sent.
 
 Afterwards, we try to test with different number of VPCs and ports, and see how NCM performs.
+
+Some limitations that these testcases have are 1) The testcases were done against only one NCM instance; 2) There are only two clients(the Dubhe Agent and the ACA) and only the Dubhe Agent triggers the on-demand workflow.
 
 == Major Latencies in NCM's on-demand Workflow
 The following are the three major latencies in NCM's on-demand workflow:
@@ -94,4 +99,7 @@ image::ncm_stress_test_latencies_percentage.png[latencies_percentage, 800]
 
 If you wish to run the test yourself, you shall utilize the Test Controller(https://github.com/futurewei-cloud/alcor/blob/master/services/pseudo_controller/src/main/java/com/futurewei/alcor/pseudo_controller/pseudo_controller.java), the Dhube Agent(https://github.com/futurewei-cloud/dubhe_agent) and the ACA(https://github.com/futurewei-cloud/alcor-control-agent/). If you would like to produce a table like the one in this page, you should also take a look at this script(https://github.com/futurewei-cloud/alcor-control-agent/blob/master/analyze.py).
 
+== Future Improvement
+. We'd like to improve the test by increasing the size of the NCM cluster, for example, from one NCM instance to five.
+. We'd like to improvee the test by increasing the number of agents that triggeres the on-demand workflow. This scenario is more close to the real-world scenario where there will be multiple agents sending on-demand requests at the same time.
 
