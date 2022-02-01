@@ -1,0 +1,48 @@
+{
+    "AlcorPerformancePlugin.alcor_server_scalability": [
+        {
+            "args": {
+                "flavor": {
+                    "name": "m1.tiny"
+                },
+                "image": {
+                    "name": "cirros-healthcheck"
+                },
+                "number_of_networks": 10, 
+                "instances_per_network": 10,
+                "instance_booting_requests": 1
+            }, 
+            "runner": {
+                "type": "constant",
+                "times": 10,
+                "concurrency": 5,
+                "timeout": 10000
+            },
+            "sla": {
+                "failure_rate": {
+                    "max": 0
+                }
+            },
+            "context": {
+                "users": {
+                    "users_per_tenant": 1,
+                    "tenants": 1
+                },
+                "quotas": {
+                    "nova": {
+                        "instances": -1,
+                        "cores": -1,
+                        "ram": -1
+                    },
+                    "neutron": {
+                        "network": -1,
+                        "subnet": -1,
+                        "port": -1,
+                        "router": -1,
+                        "security_group": -1
+                    }
+                }
+            }
+        }
+    ]
+}

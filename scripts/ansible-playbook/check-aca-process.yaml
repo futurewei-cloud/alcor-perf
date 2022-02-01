@@ -1,0 +1,16 @@
+---
+- hosts: nova_compute
+  tasks:
+    - name: Check if ACA is running
+      shell: pgrep AlcorControlAge
+      ignore_errors: yes
+      changed_when: false
+      register: service_aca_status
+
+    - name: Report status of ACA
+      fail:
+        msg: |
+          Service AlcorControlAge is not running.
+          Return code from `pgrep`:
+          {{ service_aca_status.rc }}
+      when: service_aca_status.rc != 0

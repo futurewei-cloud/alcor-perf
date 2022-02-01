@@ -1,0 +1,79 @@
+# Unless mention to use 'sudo -i' in each block, please don't run as root!
+
+# remove all docker from openstack hosts
+sudo -i
+docker stop $(docker ps -a -q)
+docker rm $(docker ps -a -q)
+docker rmi $(docker images -q)
+docker system prune --volumes
+
+# except control host, remove all files under /etc/kolla.
+# for control host, keep only globals.yml and passwrod.yml
+
+# deploying openstack
+kolla-ansible -i multinode bootstrap-servers
+kolla-ansible -i multinode prechecks
+kolla-ansible -i multinode deploy
+
+kolla-ansible post-deploy
+
+source /etc/kolla/admin-openrc.sh
+
+kolla-openstack/share/kolla-ansible/init-runonce
+
+# update elastic_search on all hosts, run ./update_elasticsearch.sh under 'sudo -i' on all machine.
+# then restart all container
+docker stop $(docker ps -a -q)
+docker start $(docker ps -a -q)
+
+# Add user 'alcor' with pass 'alcor_pass' in the horizon UI, with admin goup and admin permission.
+
+# disable neutron service
+openstack service list --long
+openstack service set --disable neutron
+
+# delete neutron endpoing
+openstack endpoint list
+openstack endpoint delete <ID>
+
+# Add Alcor service
+openstack service create --name alcor --description alcor network
+
+# create Alcor endpoint
+openstack endpoint create --region RegionOne alcor public http://10.213.43.162:30009
+openstack endpoint create --region RegionOne alcor internal http://10.213.43.162:30009
+openstack endpoint create --region RegionOne alcor admin http://10.213.43.162:30009
+
+# Stop all neutron containers
+sudo -i
+docker ps
+docker stop <container_name_start_with_neutron>
+
+# Redeploy Alcor on k8s
+
+# On openstack compute node, go to 'openvswitch_vswitchd' container install ACA.
+sudo -i
+docker exec -u 0 -it openvswitch_vswitchd /bin/bash
+
+# in openvswitch_vswitchd container
+apt update
+apt install git
+apt install uuid
+apt-get install -y uuid-dev
+apt install wget
+
+git clone --recurse-submodules https://github.com/futurewei-cloud/alcor-control-agent.git /root/alcor-control-agent
+
+cd alcor/build 
+./aca-machine-init.sh
+
+
+# if aca do not work do the following:
+# in openvswitch_vswitchd container
+# kill -9 <aca process>
+ovs-vsctl del-br br-int && ovs-vsctl del-br br-tun
+
+# then exit container, restart all container on that host.
+# then get back into openvswitch_vswitchd container do:
+ovs-vsctl del-br br-int && ovs-vsctl del-br br-tun
+nohup /root/alcor-control-agent/build/bin/AlcorControlAgent -d >/dev/null </dev/null 2>&1 &

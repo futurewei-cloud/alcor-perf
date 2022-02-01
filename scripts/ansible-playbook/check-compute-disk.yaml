@@ -1,0 +1,16 @@
+---
+- hosts: nova_compute
+  tasks:
+    - name: show / disk space on all compute nodes
+      shell: df -Th / | tail -1
+      register: space
+
+    - debug: var=space.stdout_lines
+
+    - name: check if / disk has enough space 
+      shell: df / --output\=pcent | tail -1 | awk -F'%' '{print $1}'
+      register: disk_space
+
+    - fail:
+            msg: / does not have enough space - {{ disk_space.stdout }}% used.
+      when: disk_space.stdout|int > 90
