@@ -658,7 +658,7 @@ Bellow are a list of different tests we did with VM creation, the results does n
 
 <br />
 
-# Conclusions and Future Work (TODO):  
+# Conclusions and Future Work:  
 
 In Conclusion, our Alcor's performance has live up to our expectation. But because the limitation of Rally and OpenStack overhead, we did not reached the true limitation of Alcor. In the future we can use or make some tools to communicate with Alcor directly, bypass all the overhead to see the true performance of Alcor.  
 
