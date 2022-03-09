@@ -133,6 +133,14 @@ Below are the list of OpenStack services running on our 5 controller node, all b
 | 24            | 62.8GB      | 1.8TB                 |
 | 24            | 125.5GB     | 547GB                 |
 
+<br />
+
+### How Rally interact with OpenStack and test
+
+![alt text](images/Rally-Actions.png)
+
+Rally work along side of OpenStack, it will try to simulate the user input from OpenStack dashboard or CLI, but it will also do some direct calls to each openstack services, but with very similar workflow as organic user inputs.  
+
 # Performance Test Insights  
 
 During our Rally performance testing on Alcor API level and end-to-end with VM creation. We will face the OpenStack overhead, and sometimes those overhead can affect our results greatly since some of our tasks only take millisecond to perform in Alcor side.  
@@ -142,6 +150,8 @@ To try to take out as much overhead from OpenStack as possible from our results.
 > QPS = number of current / time per task  
 
 **Our pod setup for our Alcor services in K8s during tests:**  
+
+For each API test, unless specified, we are running with 6 pod each for Alcor DBs in the K8s environment, as for the Alcor services in the K8s we are starting with 5 pod each; run 6 tests on that config, then increase the number of Alcor services pod by 5, then run the tests again.  
 
 |                          | 5 pod | 10 pod | 15 pod | 20 pod | 25 pod |
 | ------------------------ | ----- | ------ | ------ | ------ | ------ |
@@ -168,7 +178,12 @@ To try to take out as much overhead from OpenStack as possible from our results.
 
 ## API Test, Port:  
 
-### Max QPS is 3559.6283  
+### Max QPS is 3617  
+
+As we start to run our API tests, we are expected to see two patens.  
+- One is as we do more runs on the same number of pod configuration in k8s for Alcor, we will see a increase in QPS as system start to warmup, then the QPS may decrease again since we didn't cleanup the DB after each run.  
+- Second, we will expect to see an increase in QPS as we increase the number of pods for Alcor service's in the K8s cluster. But eventually we may see the QPS stop growing, or even decreasing as we increase the number of Pods. Since we only have limited resources in our K8s cluster.  
+
 ```
 {
     "title": "NeutronNetworks.create_and_list_ports",
@@ -205,19 +220,26 @@ To try to take out as much overhead from OpenStack as possible from our results.
 }
 ```
 
-|       | 10 pods    | 15 pods    | 20 pods    |
-| ----- | ---------- | ---------- | ---------- |
-| run 1 | 1425.26345 | 1486.11986 | 1616.49161 |
-| run 2 | 2655.35165 | 2848.59794 | 3559.6283  |
-| run 3 | 3460.68652 | 1972.11217 | 2453.71031 |
-| Avg   | 2513.76721 | 2102.27666 | 2543.27674 |
-| Max   | 3460.68652 | 2848.59794 | 3559.6283  |
+|       | 5 pods     | 10 pods    | 15 pods    | 20 pods    | 25 pods     |
+| ----- | ---------- | ---------- | ---------- | ---------- | ----------- |
+| run 1 | 1121.50692 | 1100.61395 | 1168.04086 | 1196.7473  | 1147.375386 |
+| run 2 | 2721.01403 | 2548.76433 | 2163.23577 | 2150.74443 | 1582.221191 |
+| run 3 | 2773.95136 | 2858.57847 | 3617.86452 | 3241.52709 | 3501.67849  |
+| run 4 | 1911.28605 | 2494.337   | 3078.50034 | 2987.68877 | 2765.557526 |
+| run 5 | 2519.02377 | 3374.84124 | 2971.57462 | 2623.8086  | 2519.896116 |
+| Avg   | 2481.3188  | 2819.13026 | 2957.79381 | 2750.94222 | 2592.338331 |
+| Max   | 2773.95136 | 3374.84124 | 3617.86452 | 3241.52709 | 3501.67849  |
+
+| | |
+| --- | --- |
+| ![](images/port_max_qps.png) | ![](images/port_max_qps_p.png) |
+
 
 <br />
 
 ### When there is a lot of data in DB:  
 
-When there is a lot of data in DB, and list port is performed. Tests will got slower and slower
+When there is a lot of data in DB, and list port is performed. Tests will got slower and slower. Since the un-deleted ports are still in the DB which are affect our list port performance, in turn block our port creation process.  
 
 ```
 {
@@ -434,14 +456,38 @@ But rather is the DB performance. As more data write into the DB, our QPS become
 
 <br />
 
-## API Test, VPC (TODO):  
+## API Test, VPC:  
 
+The VPC test is in general very similar to the previous tests.  
+The Biggest different is when creating VPC, each time it will have a huge keystone overhead that we cannot remove during calculation.  
+Since the earlier tests are all within the VPC do something, then we can remove the first time overhead. But in this case, each VPC is stand alone, and need the entire process to be created. Thus why we are seeing such low QPS on creating VPC.  
 
+|       | 5 pods     | 10 pods | 15 pods    | 20 pods    | 25 pods     |
+| ----- | ---------- | ------- | ---------- | ---------- | ----------- |
+| run 1 | 87.3547123 |         | 116.070835 | 117.163573 | 106.3543509 |
+| run 2 | 97.9381727 |         | 151.075641 | 141.532611 | 135.6119688 |
+| run 3 | 127.521529 |         | 119.350571 | 150.475931 | 138.4461197 |
+| run 4 | 107.651403 |         | 162.683393 | 142.332809 | 125.1218739 |
+| run 5 | 97.4664581 |         | 157.249331 | 106.5709   | 132.83853   |
+| Avg   | 107.644391 |         | 147.589734 | 135.228063 | 133.0046231 |
+| Max   | 127.521529 |         | 162.683393 | 150.475931 | 138.4461197 |
 
-## End to End Test:
+| | |
+| --- | --- |
+| ![](images/vpc_qps.png) | ![](images/vpc_qps_p.png) |
+
+<br />
+
+## End to End Test with VM Creation:
 
 For end to end test, our main issue is with Nova been too slow. It doesn't directly reflect our Alcor performance.  
-It is hard to get a test to pass, since Nova booting VM will fail from time to time. 
+There are many steps taken place when booting a VM with Nova in OpenStack, as those steps are taking place for each VM, Alcor is only a small part of it. Since the Nova may take really long to do its job, Alcor will be waiting a lot, thus is really hard to push the limit of Alcor.  
+
+It is hard to get a test to pass too, since Nova booting VM will fail from time to time. We have observe VM creation failure from both Nova controller side and Nova compute side on compute hosts.  
+- From compute side, we mainly see the issue of "tap-device not found" error from ACA. Which can be *'fixed'* if we change the Alcor timeout from 300 seconds to 600 seconds. Since Nova will re-try after 300 seconds, and put in the tap-device.  
+- From Nova server side on the controller we have observe many different type of errors when try to create VMs really fast. For example, nova-schedular will have many issues finding the right host. Then messaging services sometimes will error out too. Lastly, the SQL DB on OpenStack cannot handle high concurrent, when we create/delete VMs at a fast speed, the SQL DB will start to have miss match between tables.  
+
+Bellow are a list of different tests we did with VM creation, the results does not seem really ideal. But when compare with others performance on the internet, they do seems to be reasonable with our current OpenStack configuration.  
 
 ## End-to-end Test, Small VPC:
 
@@ -614,6 +660,10 @@ It is hard to get a test to pass, since Nova booting VM will fail from time to t
 
 # Conclusions and Future Work (TODO):  
 
+In Conclusion, our Alcor's performance has live up to our expectation. But because the limitation of Rally and OpenStack overhead, we did not reached the true limitation of Alcor. In the future we can use or make some tools to communicate with Alcor directly, bypass all the overhead to see the true performance of Alcor.  
+
+As for the end-to-end test that are including VM booting, and all other OpenStack's component. We can try to redeploy our OpenStack cluster to have more controller nodes. Let each OpenStack service have it's own machines, rather than all stack together. And at least have SSD for the SQL DB.  
+Also we can try the cloud on cloud for our OpenStack cluster, that will enable us to have the ability to quickly change OpenStack configuration. Thus we can test with more flexibility and faster reset speed if anything goes wrong.  
 
 # Additional information:  
 
@@ -625,44 +675,44 @@ Below is the process of when creating a VM from the OpenStack Horizon UI or CLI.
 
 ![OpenStack-VM-Provisioning-Flow](images/OpenStack-VM-Provisioning-Flow.jpeg)  
 
-Step:1) The Horizon Dashboard or OpenStack CLI gets user credentials and authenticates with identity service via REST API  
-
-- The identity service (Keystone) authenticate the user with the user credentials and then generates and send back an auth-token, that auth-token which will be used for sending the request to other components through REST-Call  
-
-Step:2) The Dashboard or OpenStack CLI converts new instance request specified in launch instance or nova boot command to a REST API request and sent it to nova-api  
-
-Step:3) Then nova-api service gets the request and send that request to the identity service (Keystone) for validation of auth-token and access permission,  
-
-- Keystone service validates the token and send the updated authentication headers with roles along with the permissions  
-
-Step:4) After getting the response from keystone, then  nova-api checks for conflicts with nova-database and then it creates initial database entry for new instance or VM.  
-
-Step:5) nova-api sends the rpc.call request to nova-scheduler expecting to get updated instance entry with host id specified  
-
-Step:6) Now nova-scheduler picks the request from the queue  
-
-Step:7) nova-scheduler talks to nova-database to locate an appropriate host using filtering and weighing mechanism,  
-
-- nova-scheduler returns the updated instance entry with the appropriate host ID after filtering and weighing  
-- nova-scheduler sends the rpc.cast request to nova compute for launching an instance on the appropriate host  
-
-Step:8) nova-compute picks the request from the queue and it sends the rpc.call request to nova-conductor to get the VM or instance info such as host id and flavor (RAM,CPU and Disk)  
-
-Step:9) nova-conductor takes the request from queue and communicate with nova-database,  
-
-- nova-conductor gets the instance information  
-- now nova-compute picks the instance information from the queue  
-
-Step:10) nova-compute connects to glance-api by making a REST Call using auth-token and then nova-compute uses the image id to get the image URI from image service and loads the image from image storage
-
-Step:11) glance-api validates the auth-token with keystone and after that nova-compute gets the image metadata  
-
-Step:12) Nova-compute make the REST-call by passing the auth-token to Network API (Neutron) to allocate and configure network so that vm gets the IP address  
-
-Step:13) Neutron-server validates the auth-token with keystone and after that nova-compute retrieves the network information.  
-
-Step:14) Nova-Compute makes the REST-call by passing the auth-token to Volume API to attach the volume to the instance or VM.  
-
-Step:15) cinder-api validates the auth-token with keystone and then nova-compute gets the block storage information.  
-
-Step:16) nova-compute generates data for the hypervisor driver and executes the request on the hypervisor using libvirt or API and then finally a VM is created on the hypervior. We can see that VM in Dashboard and also using “nova list” command.  
+> Step:1) The Horizon Dashboard or OpenStack CLI gets user credentials and authenticates with identity service via REST API  
+> 
+> - The identity service (Keystone) authenticate the user with the user credentials and then generates and send back an auth-token, that auth-token which will be used for sending the request to other components through REST-Call  
+> 
+> Step:2) The Dashboard or OpenStack CLI converts new instance request specified in launch instance or nova boot command to a REST API request and sent it to nova-api  
+> 
+> Step:3) Then nova-api service gets the request and send that request to the identity service (Keystone) for validation of auth-token and access permission,  
+> 
+> - Keystone service validates the token and send the updated authentication headers with roles along with the permissions  
+> 
+> Step:4) After getting the response from keystone, then  nova-api checks for conflicts with nova-database and then it creates initial database entry for new instance or VM.  
+> 
+> Step:5) nova-api sends the rpc.call request to nova-scheduler expecting to get updated instance entry with host id specified  
+> 
+> Step:6) Now nova-scheduler picks the request from the queue  
+> 
+> Step:7) nova-scheduler talks to nova-database to locate an appropriate host using filtering and weighing mechanism,  
+> 
+> - nova-scheduler returns the updated instance entry with the appropriate host ID after filtering and weighing  
+> - nova-scheduler sends the rpc.cast request to nova compute for launching an instance on the appropriate host  
+> 
+> Step:8) nova-compute picks the request from the queue and it sends the rpc.call request to nova-conductor to get the VM or instance info such as host id and flavor (RAM,CPU and Disk)  
+> 
+> Step:9) nova-conductor takes the request from queue and communicate with nova-database,  
+> 
+> - nova-conductor gets the instance information  
+> - now nova-compute picks the instance information from the queue  
+> 
+> Step:10) nova-compute connects to glance-api by making a REST Call using auth-token and then nova-compute uses the image id to get the image URI from image service and loads the image from image storage
+> 
+> Step:11) glance-api validates the auth-token with keystone and after that nova-compute gets the image metadata  
+> 
+> Step:12) Nova-compute make the REST-call by passing the auth-token to Network API (Neutron) to allocate and configure network so that vm gets the IP address  
+> 
+> Step:13) Neutron-server validates the auth-token with keystone and after that nova-compute retrieves the network information.  
+> 
+> Step:14) Nova-Compute makes the REST-call by passing the auth-token to Volume API to attach the volume to the instance or VM.  
+> 
+> Step:15) cinder-api validates the auth-token with keystone and then nova-compute gets the block storage information.  
+> 
+> Step:16) nova-compute generates data for the hypervisor driver and executes the request on the hypervisor using libvirt or API and then finally a VM is created on the hypervior. We can see that VM in Dashboard and also using “nova list” command.  
