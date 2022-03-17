@@ -50,32 +50,32 @@ ___
       state: present
       update_cache: true
 
-- name: install APT Transport HTTPS
-  apt:
-    name: apt-transport-https
-    state: present
+  - name: install APT Transport HTTPS
+    apt:
+      name: apt-transport-https
+      state: present
 
-- name: add Kubernetes apt-key
-  apt_key:
-    url: https://packages.cloud.google.com/apt/doc/apt-key.gpg
-    state: present
+  - name: add Kubernetes apt-key
+    apt_key:
+      url: https://packages.cloud.google.com/apt/doc/apt-key.gpg
+      state: present
 
-- name: add Kubernetes' APT repository
-  apt_repository:
-    repo: deb http://apt.kubernetes.io/ kubernetes-xenial main
-    state: present
-    filename: 'kubernetes'
+  - name: add Kubernetes' APT repository
+    apt_repository:
+      repo: deb http://apt.kubernetes.io/ kubernetes-xenial main
+      state: present
+      filename: 'kubernetes'
 
-- name: install kubelet
-  apt:
-    name: kubelet=1.19.4-00
-    state: present
-    update_cache: true
+  - name: install kubelet
+    apt:
+      name: kubelet=1.19.4-00
+      state: present
+      update_cache: true
 
-- name: install kubeadm
-  apt:
-     name: kubeadm=1.19.4-00
-     state: present
+  - name: install kubeadm
+    apt:
+      name: kubeadm=1.19.4-00
+      state: present
 
 - hosts: master
   become: yes
@@ -137,6 +137,8 @@ ___
   gather_facts: false
   tasks:
   - name: get join command
+    environment:
+      KUBECONFIG: /etc/kubernetes/admin.conf
     shell: kubeadm token create --print-join-command
     register: join_command_raw
 
