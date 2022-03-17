@@ -7,7 +7,7 @@ Alcor is a A Hyperscale Cloud Native SDN Platform, for us to test it, we have an
 
 For the performance testing, we will use Rally to test both the Alcor API load and ene-to-end tests include VM (involves Nova) creation. Rally is an OpenStack project, it enables the performance to simulate normal user or users input from OpenStack Horizon UI or CLI.  
 
-### Issues:  
+### Changleges:  Sloved pending 
 
 As mentioned earlier, we are using Rally to do both the Alcor API test and end-to-end VM creation tests inside a real OpenStack cluster.  
 The OpenStack itself sometimes will become the bottleneck for our tests.  
@@ -19,7 +19,7 @@ To **SOLVE** this slow cleanup issue, we disabled the network cleanup in Rally's
 - Second issue we are running into that cause the performance tests to last really long is during end-to-end tests with VM creation. Not only this also include the above issue for VM clean up. It also have issues during creating VM. When during Rally test, VM don't always created successfully. Rally will 300 seconds per VM if something goes wrong. And if some VM was not created successfully, Rally may very well also have issues deleting that particular VM, which will waite for another 600 seconds before time out.  
 Our solution to help with this situation are: Rebooting ACA, Nova-compute and cleanup OVS on all compute node, rebooting Nova service in the controllers. Those steps won't generate 100% success rate, but will definitely help with the situation.  
 
-# Performance Setup  
+# Performance Test Setup  
 
 Our entire setup consist of an OpenStack cluster with 5 controller node and 64 compute nodes. And a 7 node K8s cluster for our Alcor services. Detail with be listed in below section.  
 
