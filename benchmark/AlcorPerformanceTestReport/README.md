@@ -526,6 +526,8 @@ Below is a list of different tests we did with VM creation; the results do not s
 
 ## End-to-end Test, Small VPC:
 
+For this test case, we boot one VM per one VPC.
+
 ```
 {
     "title": "NeutronPerformancePlugin.neutron_network_scalability",
@@ -581,6 +583,8 @@ Below is a list of different tests we did with VM creation; the results do not s
 | run 5 | 0.97742867 |
 
 <br />
+
+From the graph, we can see about 4.5 QPS we can reach. For run 5, the VM creation starts to fail, thus why we see a huge drop in QPS.  
 
 ## End-to-end VM creation Test for Large VPC scenario:  
 
@@ -640,6 +644,8 @@ In this test, we will have multiple VMs per VPC. And each VM will have one port 
 | run 2 | 0.42073825 |
 | run 3 | 0.43146736 |
 
+For large VPC scenario, booting 10 VM per VPC we can reach about .4 QPS.  
+
 <br />
 
 ## End-to-end VM creation Test for Multiple Port per VM scenario:   
@@ -694,6 +700,8 @@ This test is similar to the above but compared to only one port per VM. This tes
 ```
 
 ![](images/alcor-port_9n-10s-10p-10t-10c_run1-2022-03-05_00-41-28.json_boxplot.png)
+
+We can see from the above graph that during our test with multiple port per VM. The time toke for Alcor to perform is reasonably fast. But "boot server" by Nova is taken about 30 seconds each, which significantly limits our end-to-end performance.  
 
 <br />
 
