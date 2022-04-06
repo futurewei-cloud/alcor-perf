@@ -1,27 +1,51 @@
-# Introduction  
+- [Overview:](#overview)
+    - [Challenges: Solved/pending](#challenges-solvedpending)
+- [Performance Test Environment Setup](#performance-test-environment-setup)
+  - [Alcor K8s cluster set up:](#alcor-k8s-cluster-set-up)
+  - [Alcor Medina (OpenStack) cluster setup:](#alcor-medina-openstack-cluster-setup)
+    - [How Rally interacts with OpenStack and test](#how-rally-interacts-with-openstack-and-test)
+- [Performance Test Cases and Scenarios](#performance-test-cases-and-scenarios)
+- [Performance Test Result](#performance-test-result)
+  - [Alcor API Test for Port creation and list:](#alcor-api-test-for-port-creation-and-list)
+    - [Max QPS is 3617](#max-qps-is-3617)
+    - [When there is a lot of data in DB:](#when-there-is-a-lot-of-data-in-db)
+    - [When run two test with the same configuration we will still have some different results:](#when-run-two-test-with-the-same-configuration-we-will-still-have-some-different-results)
+  - [Alcor API Test for Subnet creation and list:](#alcor-api-test-for-subnet-creation-and-list)
+    - [200 Concurrent:](#200-concurrent)
+    - [300 Concurrent:](#300-concurrent)
+    - [400 Concurrent:](#400-concurrent)
+    - [500 Concurrent:](#500-concurrent)
+  - [API Test, VPC:](#api-test-vpc)
+  - [End to End Test with VM Creation:](#end-to-end-test-with-vm-creation)
+  - [End-to-end Test, Small VPC:](#end-to-end-test-small-vpc)
+  - [End-to-end VM creation Test for Large VPC scenario:](#end-to-end-vm-creation-test-for-large-vpc-scenario)
+  - [End-to-end VM creation Test for Multiple Port per VM scenario:](#end-to-end-vm-creation-test-for-multiple-port-per-vm-scenario)
+- [Conclusions and Future Work:](#conclusions-and-future-work)
+- [Additional information:](#additional-information)
+  - [Openstack VM Creation Process:](#openstack-vm-creation-process)
 
-### Overview:  
+# Overview:  
 
-In this performance test report, we will discuss what is the performance of Alcor microservice.  
-Alcor is a A Hyperscale Cloud Native SDN Platform, for us to test it, we have an OpenStack cluster called Medina, and replace the Neutron in the OpenStack with Alcor. Neutron is an OpenStack project to provide "network connectivity as a service" between interface devices (e.g., vNICs) managed by other OpenStack services (e.g., Nova).  
+In this performance test report, we will discuss the performance of the Alcor microservice.  
+Alcor is a Hyperscale Cloud-Native SDN Platform; to test it, we have an OpenStack cluster called Medina and replace the Neutron in the OpenStack with Alcor. Neutron is an OpenStack project to provide "network connectivity as a service" between interface devices (e.g., vNICs) managed by other OpenStack services (e.g., Nova).  
 
-For the performance testing, we will use Rally to test both the Alcor API load and ene-to-end tests include VM (involves Nova) creation. Rally is an OpenStack project, it enables the performance to simulate normal user or users input from OpenStack Horizon UI or CLI.  
+For the performance testing, we used Rally to test both the Alcor API load and end-to-end tests, including VM (involves Nova) creation. Rally is an OpenStack project, it enables the performance test to simulate normal user or users input from OpenStack Horizon UI or CLI.   
 
-### Changleges:  Sloved pending 
+### Challenges: Solved/pending 
 
 As mentioned earlier, we are using Rally to do both the Alcor API test and end-to-end VM creation tests inside a real OpenStack cluster.  
-The OpenStack itself sometimes will become the bottleneck for our tests.  
-For example, when testing the Alcor API to create a network, Rally will go through OpenStack, and most of OpenStack operation if not all will have to go through Keystone. Which will add an overhead to our test. As for the end-to-end VM creation tests, not only keystone will be a overhead, Nova itself sometimes will become the bottleneck for our tests. Since Nova is very complex and involves many steps to create a VM. Will have farther explain later in the report.  
+The OpenStack itself sometimes is the bottleneck for our tests.  
+For example, when testing the Alcor API to create a network, Rally will go through OpenStack, and most OpenStack operations, if not all, will have to go through Keystone, which added an additional overhead to our test. As for the end-to-end VM creation tests, not only will Keystone be an overhead, Nova itself sometimes can become the bottleneck for our tests since Nova is very complex and involves many steps to create a VM. We will have further explained this later in the report.  
 
-Another problem we run into is that when running performance tests it can take extremely long to finish a test. There were two main scenarios:  
-- First cause is during the clean up stage during the performance tests. For example, we will create ports with really high concurrency. But after the test have finished, Rally will try to delete those ports been created earlier one-by-one. Which sometimes is extremely time consuming.  
-To **SOLVE** this slow cleanup issue, we disabled the network cleanup in Rally's Python code, then reset our Alcor in the K8s cluster and delete Alcor's DB. From our solution, we can shorten a 50 mins long test in to just 5 mins.  
-- Second issue we are running into that cause the performance tests to last really long is during end-to-end tests with VM creation. Not only this also include the above issue for VM clean up. It also have issues during creating VM. When during Rally test, VM don't always created successfully. Rally will 300 seconds per VM if something goes wrong. And if some VM was not created successfully, Rally may very well also have issues deleting that particular VM, which will waite for another 600 seconds before time out.  
-Our solution to help with this situation are: Rebooting ACA, Nova-compute and cleanup OVS on all compute node, rebooting Nova service in the controllers. Those steps won't generate 100% success rate, but will definitely help with the situation.  
+Another problem we run into is that when running performance tests, it can take extremely long to finish a test. There were two main scenarios:  
+- First cause is during the clean-up stage of the performance tests. For example, we will create ports with really high concurrency. But after the test has finished, Rally will try to delete those ports been created earlier one by one. Which sometimes is extremely time-consuming.  
+To **SOLVE** this slow clean-up issue, we disabled the network clean-up in Rally's Python code, reset our Alcor in the K8s cluster, and deleted Alcor's DB. From our solution, we can shorten 50 minutes long test to just 5 minutes.  
+- The second issue we are running into that causes the performance tests to last really long is during end-to-end tests with VM creation. Not only this also include the above issue for VM clean up. It also has problems while creating VM. For example, VM doesn't always complete successfully during the Rally test. Rally will wait 300 seconds per VM if something goes wrong. And if some VM was not created successfully, Rally may very well also have issues deleting that particular VM, which will wait for another 600 seconds before time out.  
+Our solutions to help with this situation are: Rebooting ACA, Nova-compute, clean-up OVS on all compute nodes, and rebooting Nova service in the controllers. Of course, those steps won't generate 100% success rate but will definitely help with the situation.  
 
-# Performance Test Setup  
+# Performance Test Environment Setup 
 
-Our entire setup consist of an OpenStack cluster with 5 controller node and 64 compute nodes. And a 7 node K8s cluster for our Alcor services. Detail with be listed in below section.  
+Our entire setup consists of an OpenStack cluster with five controller nodes and 64 compute nodes. And a seven node K8s cluster for our Alcor services. Detail with be listed in the below section.  
 
 ## Alcor K8s cluster set up:  
 
@@ -37,10 +61,10 @@ Our entire setup consist of an OpenStack cluster with 5 controller node and 64 c
 
 ## Alcor Medina (OpenStack) cluster setup:  
 
-Our Alcor Medina (OpenStack) cluster is configured with 5 controller node, and 64 worker (compute) nodes.  
-Below are the list of OpenStack services running on our 5 controller node, all below service have one copy on each machine:  
+Our Alcor Medina (OpenStack) cluster is configured with five controller nodes and 64 workers (compute) nodes.  
+Below is the list of OpenStack services running on our five controller nodes; all below services have one copy on each machine:  
 - cinder_api_container  
-- galera_container  
+- galera_container (Not used)  
 - glance_container  
 - heat_api_container  
 - horizon_container  
@@ -66,92 +90,98 @@ Below are the list of OpenStack services running on our 5 controller node, all b
 **Our compute nodes configurations:**  
 - In total we have 2,808 vCPUs, 16,263 GB of RAM, and 64,254 GB of Storage
 
-| VCPUs (total) | RAM (total) | Local Storage (total) |
-| ------------- | ----------- | --------------------- |
-| 80            | 755.5GB     | 730GB                 |
-| 80            | 755.5GB     | 730GB                 |
-| 80            | 755.5GB     | 730GB                 |
-| 80            | 755.5GB     | 730GB                 |
-| 80            | 755.5GB     | 730GB                 |
-| 80            | 755.5GB     | 730GB                 |
-| 80            | 755.5GB     | 730GB                 |
-| 72            | 503.7GB     | 547GB                 |
-| 64            | 503.5GB     | 546GB                 |
-| 64            | 440.5GB     | 547GB                 |
-| 64            | 503.5GB     | 546GB                 |
-| 64            | 503.5GB     | 546GB                 |
-| 64            | 503.5GB     | 546GB                 |
-| 56            | 377.5GB     | 1.4TB                 |
-| 56            | 377.5GB     | 1.4TB                 |
-| 56            | 377.5GB     | 1.4TB                 |
-| 56            | 377.5GB     | 1.4TB                 |
-| 56            | 377.5GB     | 1.4TB                 |
-| 56            | 377.5GB     | 1.4TB                 |
-| 56            | 377.5GB     | 1.4TB                 |
-| 56            | 377.5GB     | 1.4TB                 |
-| 48            | 125.5GB     | 1.1TB                 |
-| 48            | 125.5GB     | 1.1TB                 |
-| 48            | 125.5GB     | 1.1TB                 |
-| 40            | 125.8GB     | 1.8TB                 |
-| 40            | 125.8GB     | 1.8TB                 |
-| 40            | 125.8GB     | 1.8TB                 |
-| 40            | 125.8GB     | 1.8TB                 |
-| 40            | 125.8GB     | 1.8TB                 |
-| 40            | 125.8GB     | 1.8TB                 |
-| 40            | 188.9GB     | 272GB                 |
-| 40            | 188.9GB     | 271GB                 |
-| 40            | 377.5GB     | 363GB                 |
-| 40            | 377.5GB     | 363GB                 |
-| 32            | 125.9GB     | 547GB                 |
-| 32            | 125.9GB     | 547GB                 |
-| 32            | 125.9GB     | 547GB                 |
-| 32            | 125.9GB     | 547GB                 |
-| 32            | 125.9GB     | 547GB                 |
-| 32            | 125.9GB     | 547GB                 |
-| 32            | 125.9GB     | 547GB                 |
-| 32            | 125.9GB     | 547GB                 |
-| 32            | 125.9GB     | 547GB                 |
-| 32            | 125.5GB     | 546GB                 |
-| 32            | 125.5GB     | 546GB                 |
-| 32            | 125.5GB     | 546GB                 |
-| 32            | 125.5GB     | 546GB                 |
-| 32            | 125.5GB     | 546GB                 |
-| 32            | 125.5GB     | 546GB                 |
-| 32            | 125.5GB     | 546GB                 |
-| 32            | 125.5GB     | 546GB                 |
-| 32            | 125.5GB     | 546GB                 |
-| 24            | 31.3GB      | 913GB                 |
-| 24            | 31.3GB      | 1.8TB                 |
-| 24            | 31.3GB      | 1.8TB                 |
-| 24            | 31.3GB      | 1.8TB                 |
-| 24            | 31.3GB      | 1.8TB                 |
-| 24            | 31.3GB      | 1.8TB                 |
-| 24            | 31.3GB      | 1.8TB                 |
-| 24            | 31.3GB      | 1.8TB                 |
-| 24            | 15.6GB      | 1.8TB                 |
-| 24            | 15.6GB      | 1.8TB                 |
-| 24            | 62.8GB      | 1.8TB                 |
-| 24            | 125.5GB     | 547GB                 |
+| **Hostname** | **VCPUs (total)** | **RAM (total)** | **Local Storage (total)** |
+| ------------ | ----------------- | --------------- | ------------------------- |
+| fw0015525    | 80                | 755.5GB         | 730GB                     |
+| fw0015530    | 80                | 755.5GB         | 730GB                     |
+| fw0015531    | 80                | 755.5GB         | 730GB                     |
+| fw0015532    | 80                | 755.5GB         | 730GB                     |
+| fw0015533    | 80                | 755.5GB         | 730GB                     |
+| fw0015534    | 80                | 755.5GB         | 730GB                     |
+| fw0015594    | 80                | 755.5GB         | 730GB                     |
+| fw0014023    | 72                | 503.7GB         | 547GB                     |
+| fw0012204    | 64                | 503.5GB         | 546GB                     |
+| fw0012206    | 64                | 503.5GB         | 546GB                     |
+| fw0012207    | 64                | 503.5GB         | 546GB                     |
+| fw012208     | 64                | 503.5GB         | 546GB                     |
+| fw0012205    | 64                | 440.5GB         | 547GB                     |
+| fw0016584    | 56                | 377.5GB         | 1.4TB                     |
+| fw0016585    | 56                | 377.5GB         | 1.4TB                     |
+| fw0016586    | 56                | 377.5GB         | 1.4TB                     |
+| fw0016587    | 56                | 377.5GB         | 1.4TB                     |
+| fw0016590    | 56                | 377.5GB         | 1.4TB                     |
+| fw0016591    | 56                | 377.5GB         | 1.4TB                     |
+| fw0016592    | 56                | 377.5GB         | 1.4TB                     |
+| fw0016593    | 56                | 377.5GB         | 1.4TB                     |
+| fw0013944    | 48                | 125.5GB         | 1.1TB                     |
+| fw0013945    | 48                | 125.5GB         | 1.1TB                     |
+| fw0013946    | 48                | 125.5GB         | 1.1TB                     |
+| fw0013465    | 40                | 377.5GB         | 363GB                     |
+| fw0013466    | 40                | 377.5GB         | 363GB                     |
+| fw0009091    | 40                | 188.9GB         | 272GB                     |
+| fw0009102    | 40                | 188.9GB         | 271GB                     |
+| fw0008851    | 40                | 125.8GB         | 1.8TB                     |
+| fw0008852    | 40                | 125.8GB         | 1.8TB                     |
+| fw0008854    | 40                | 125.8GB         | 1.8TB                     |
+| fw0009055    | 40                | 125.8GB         | 1.8TB                     |
+| fw0009058    | 40                | 125.8GB         | 1.8TB                     |
+| fw0009060    | 40                | 125.8GB         | 1.8TB                     |
+| fw0009076    | 32                | 125.9GB         | 547GB                     |
+| fw0009078    | 32                | 125.9GB         | 547GB                     |
+| fw0009079    | 32                | 125.9GB         | 547GB                     |
+| fw0009080    | 32                | 125.9GB         | 547GB                     |
+| fw0009081    | 32                | 125.9GB         | 547GB                     |
+| fw0009084    | 32                | 125.9GB         | 547GB                     |
+| fw0009085    | 32                | 125.9GB         | 547GB                     |
+| fw0009089    | 32                | 125.9GB         | 547GB                     |
+| fw0009090    | 32                | 125.9GB         | 547GB                     |
+| fw0014027    | 32                | 125.5GB         | 546GB                     |
+| fw0014031    | 32                | 125.5GB         | 546GB                     |
+| fw0014032    | 32                | 125.5GB         | 546GB                     |
+| fw0014036    | 32                | 125.5GB         | 546GB                     |
+| fw0014037    | 32                | 125.5GB         | 546GB                     |
+| fw0014039    | 32                | 125.5GB         | 546GB                     |
+| fw0014040    | 32                | 125.5GB         | 546GB                     |
+| fw0014041    | 32                | 125.5GB         | 546GB                     |
+| fw0014042    | 32                | 125.5GB         | 546GB                     |
+| fw0008970    | 24                | 62.8GB          | 1.8TB                     |
+| fw0004220    | 24                | 31.3GB          | 913GB                     |
+| fw0004223    | 24                | 31.3GB          | 1.8TB                     |
+| fw0004226    | 24                | 31.3GB          | 1.8TB                     |
+| fw0004229    | 24                | 31.3GB          | 1.8TB                     |
+| fw0004232    | 24                | 31.3GB          | 1.8TB                     |
+| fw0004233    | 24                | 31.3GB          | 1.8TB                     |
+| fw0004234    | 24                | 31.3GB          | 1.8TB                     |
+| fw0004237    | 24                | 31.3GB          | 1.8TB                     |
+| fw0004744    | 24                | 15.6GB          | 1.8TB                     |
+| fw0004747    | 24                | 15.6GB          | 1.8TB                     |
+| fw00140019   | 24                | 125.5GB         | 547GB                     |
 
 <br />
 
-### How Rally interact with OpenStack and test
+### How Rally interacts with OpenStack and test
 
 ![alt text](images/Rally-Actions.png)
 
-Rally work along side of OpenStack, it will try to simulate the user input from OpenStack dashboard or CLI, but it will also do some direct calls to each openstack services, but with very similar workflow as organic user inputs.  
+Rally works alongside OpenStack, and it will try to simulate the user input from the OpenStack dashboard or CLI. Still, it will also do some direct calls to each OpenStack service, but with a very similar workflow as organic user inputs.  
 
-# Performance Test Insights  
+# Performance Test Cases and Scenarios  
 
-During our Rally performance testing on Alcor API level and end-to-end with VM creation. We will face the OpenStack overhead, and sometimes those overhead can affect our results greatly since some of our tasks only take millisecond to perform in Alcor side.  
-To try to take out as much overhead from OpenStack as possible from our results. We take out the first operation from the tests when calculate the QPS, because that one will be impact the most from keystone slowdown. For example, when create 10 port, we have observe the first port usually take 5 to 10 times more time than other ports.
+We have two types of tests, API tests, and end-to-end tests:  
+- For API level tests, we test the Alcor APIs only. Requests are sent directly from Rally to Alcor, then let Alcor do its job and write in DB  
+  - Within API level tests, we mainly have Port, Subnet, VPC create and list test.
+- For end-to-end tests, Rally will still send API requests to Alcor and let Alcor do its thing. The difference has been that we are using the results from Alcor; Alcor has to configure ACA and let nova boot VMs and attach the Port to the VMs.  
+  - For end-to-end tests, we mainly have different scenarios for how many VM per VPC since all end-to-end tests booting VM will require the entire VPC, Subnet, and Port to function.  
+
+During our Rally performance testing on Alcor API level and end-to-end with VM creation. We have faced the OpenStack overhead, and sometimes those overheads can affect our results significantly since some of our tasks only take milliseconds to perform on the Alcor side.  
+To try to take out our results as much overhead from OpenStack as possible. We take out the first operation from the tests when calculating the QPS because that one will be impacted the most by the Keystone slowdown. For example, when creating ten ports, we observed that the first Port usually takes 5 to 10 times more time than other ports.  
 
 **How we calculated our QPS in the tests:**  
 > QPS = number of current / time per task  
 
 **Our pod setup for our Alcor services in K8s during tests:**  
 
-For each API test, unless specified, we are running with 6 pod each for Alcor DBs in the K8s environment, as for the Alcor services in the K8s we are starting with 5 pod each; run 6 tests on that config, then increase the number of Alcor services pod by 5, then run the tests again.  
+Unless specified, we are running with six pods each for Alcor DBs in the K8s environment for each API test. As for the Alcor services in the K8s, we start with five pods each, run six tests on that config, increase the number of Alcor services pods by 5, then rerun the tests.  
 
 |                          | 5 pod | 10 pod | 15 pod | 20 pod | 25 pod |
 | ------------------------ | ----- | ------ | ------ | ------ | ------ |
@@ -176,13 +206,15 @@ For each API test, unless specified, we are running with 6 pod each for Alcor DB
 | route\_manager           | 5     | 10     | 15     | 20     | 25     |
 | subnet\_manager          | 5     | 10     | 15     | 20     | 25     |
 
-## API Test, Port:  
+# Performance Test Result  
+
+## Alcor API Test for Port creation and list:  
 
 ### Max QPS is 3617  
 
 As we start to run our API tests, we are expected to see two patens.  
-- One is as we do more runs on the same number of pod configuration in k8s for Alcor, we will see a increase in QPS as system start to warmup, then the QPS may decrease again since we didn't cleanup the DB after each run.  
-- Second, we will expect to see an increase in QPS as we increase the number of pods for Alcor service's in the K8s cluster. But eventually we may see the QPS stop growing, or even decreasing as we increase the number of Pods. Since we only have limited resources in our K8s cluster.  
+- As we do more runs on the same number of pod configurations in k8s for Alcor, we see an increase in QPS as the system starts to warm up, then the QPS may decrease again since we didn't clean up the DB after each run.  
+- Second, we observed an increase in QPS as we increased the number of pods for Alcor services in the K8s cluster. But eventually, we may see the QPS stop growing or even decrease as we increase the number of Pods. Since we only have limited resources in our K8s cluster.  
 
 ```
 {
@@ -234,12 +266,13 @@ As we start to run our API tests, we are expected to see two patens.
 | --- | --- |
 | ![](images/port_max_qps.png) | ![](images/port_max_qps_p.png) |
 
+The above table and graph show that the maximum QPS we can reach is 3617, with 15 pods per Alcor service in the third run. Which further proved our idea. More K8s pods for Alcor will help with QPS, but if too many pods are going to compete for resources and hurt performance. And also need some worm up, and as more and more tests have been run without cleaning DB. So it is expected to see a performance drop too.  
 
 <br />
 
 ### When there is a lot of data in DB:  
 
-When there is a lot of data in DB, and list port is performed. Tests will got slower and slower. Since the un-deleted ports are still in the DB which are affect our list port performance, in turn block our port creation process.  
+When there is a lot of data in DB, and list port is performed. Tests will get slower and slower. Since the un-deleted ports are still in the DB, which affects our list port performance, in turn, blocks our port creation process.  
 
 ```
 {
@@ -345,13 +378,15 @@ Same as above test, but without list port
 | Avg   | 586.73 | 1211.76 | 1363.29 | 1435.16 | \- | Avg   | 607.08     | 1161.76    | 1439.16    | 1515.37    |
 | Max   | 658.90 | 1301.53 | 1530.06 | 1622.19 | \- | Max   | 695.68     | 1293.09    | 1537.51    | 1724.25    |
 
+From the above run, we can see. If we don't perform the 'list' in the 'create and list port' test. The QPS will keep going up as the system is more and more warmed up. Unlike in the earlier test, when the DB has too much data, the 'list port' operation will take.  
+
 
 <br />
 
-## API Test, Subnet:  
+## Alcor API Test for Subnet creation and list:  
 
-From the subnet API tests we can see, that the limiting factor for QPS is not number of Pod for Alcor's services in the K8s cluster.  
-But rather is the DB performance. As more data write into the DB, our QPS become slower and slower. Which is shouldn't be right. Normally we should see a upward curve, since our system need to warmup after a completely reset. 
+The subnet API tests show that the limiting factor for QPS is not the number of Pod for Alcor's services in the K8s cluster.  
+But rather is the DB performance. As more data is written into the DB, our QPS becomes slower, which is not correct. Usually, we should see an upward curve since our system needs to warm up after a complete reset.  
 
 ### 200 Concurrent:  
 
@@ -458,9 +493,9 @@ But rather is the DB performance. As more data write into the DB, our QPS become
 
 ## API Test, VPC:  
 
-The VPC test is in general very similar to the previous tests.  
-The Biggest different is when creating VPC, each time it will have a huge keystone overhead that we cannot remove during calculation.  
-Since the earlier tests are all within the VPC do something, then we can remove the first time overhead. But in this case, each VPC is stand alone, and need the entire process to be created. Thus why we are seeing such low QPS on creating VPC.  
+The VPC test is, in general, very similar to the previous tests.  
+The Biggest difference is when creating VPC; each time, it will have a considerable Keystone overhead that we cannot remove during calculation.  
+Since the earlier tests are all within the VPC, then do some operation, then we can remove the first operation overhead. But in this case, each VPC is stand-alone and needs the entire process to be created. This is why we are seeing such low QPS on creating VPC.   
 
 |       | 5 pods     | 10 pods | 15 pods    | 20 pods    | 25 pods     |
 | ----- | ---------- | ------- | ---------- | ---------- | ----------- |
@@ -480,14 +515,14 @@ Since the earlier tests are all within the VPC do something, then we can remove 
 
 ## End to End Test with VM Creation:
 
-For end to end test, our main issue is with Nova been too slow. It doesn't directly reflect our Alcor performance.  
-There are many steps taken place when booting a VM with Nova in OpenStack, as those steps are taking place for each VM, Alcor is only a small part of it. Since the Nova may take really long to do its job, Alcor will be waiting a lot, thus is really hard to push the limit of Alcor.  
+Our main issue is that Nova has been too slow for an end-to-end test. As a result, it doesn't directly reflect our Alcor performance.  
+There are many steps taken when booting a VM with Nova in OpenStack. As those steps are taking place for each VM, Alcor is only a tiny part of it. Since the Nova takes really long to do its job, Alcor will be waiting a lot, thus why it is tough to push the limit of Alcor.  
 
-It is hard to get a test to pass too, since Nova booting VM will fail from time to time. We have observe VM creation failure from both Nova controller side and Nova compute side on compute hosts.  
-- From compute side, we mainly see the issue of "tap-device not found" error from ACA. Which can be *'fixed'* if we change the Alcor timeout from 300 seconds to 600 seconds. Since Nova will re-try after 300 seconds, and put in the tap-device.  
-- From Nova server side on the controller we have observe many different type of errors when try to create VMs really fast. For example, nova-schedular will have many issues finding the right host. Then messaging services sometimes will error out too. Lastly, the SQL DB on OpenStack cannot handle high concurrent, when we create/delete VMs at a fast speed, the SQL DB will start to have miss match between tables.  
+It is hard to get a test to pass too, since Nova booting VM will fail from time to time. We have observed VM creation failure from both the Nova controller side and Nova compute side on compute hosts.  
+- From compute side, we mainly see the issue of the "tap-device not found" error from ACA, which can be *'fixed'* if we change the Alcor timeout from 300 seconds to 600 seconds since Nova will re-try after 300 seconds and put in the tap-device.  
+- From Nova server-side on the controller, we have observed many different types of errors when trying to create VMs really fast. For example, nova-schedular has many issues finding the right host, and messaging services sometimes error out. Lastly, the SQL DB on OpenStack cannot handle high concurrent, when as we create/delete VMs at a fast speed, the SQL DB results from having missed matches between tables.  
 
-Bellow are a list of different tests we did with VM creation, the results does not seem really ideal. But when compare with others performance on the internet, they do seems to be reasonable with our current OpenStack configuration.  
+Below is a list of different tests we did with VM creation; the results do not seem ideal. But compared with others' performance on the internet, they seem reasonable with our current OpenStack configuration.  
 
 ## End-to-end Test, Small VPC:
 
@@ -547,7 +582,9 @@ Bellow are a list of different tests we did with VM creation, the results does n
 
 <br />
 
-## End-to-end Test, Big VPC:
+## End-to-end VM creation Test for Large VPC scenario:  
+
+In this test, we will have multiple VMs per VPC. And each VM will have one port attached to it.  
 
 ```
 {
@@ -605,7 +642,9 @@ Bellow are a list of different tests we did with VM creation, the results does n
 
 <br />
 
-## End-to-end Test, Multiple Port per VM:  
+## End-to-end VM creation Test for Multiple Port per VM scenario:   
+
+This test is similar to the above but compared to only one port per VM. This test will have ten ports per VM.  
 
 ```
 {
@@ -660,10 +699,10 @@ Bellow are a list of different tests we did with VM creation, the results does n
 
 # Conclusions and Future Work:  
 
-In Conclusion, our Alcor's performance has live up to our expectation. But because the limitation of Rally and OpenStack overhead, we did not reached the true limitation of Alcor. In the future we can use or make some tools to communicate with Alcor directly, bypass all the overhead to see the true performance of Alcor.  
+In Conclusion, Alcor's performance has lived up to our expectations. But because of the limitation of Rally and OpenStack overhead, we did not reach the actual limitation of Alcor. In the future, we can use or make some tools to communicate with Alcor directly, bypassing all the overhead to see the true performance of Alcor.  
 
-As for the end-to-end test that are including VM booting, and all other OpenStack's component. We can try to redeploy our OpenStack cluster to have more controller nodes. Let each OpenStack service have it's own machines, rather than all stack together. And at least have SSD for the SQL DB.  
-Also we can try the cloud on cloud for our OpenStack cluster, that will enable us to have the ability to quickly change OpenStack configuration. Thus we can test with more flexibility and faster reset speed if anything goes wrong.  
+As for the end-to-end test that includes VM booting and all other OpenStack components, we can try to redeploy our OpenStack cluster to have more controller nodes. Also, let each OpenStack service have its own machines, rather than all stack together. And at least have SSD for the SQL DB.  
+Also, we can try the TripleO (cloud on the cloud) for our OpenStack cluster, which will enable us to have the ability to change OpenStack configuration quickly. Thus we can test with more flexibility and faster reset speed if anything goes wrong.   
 
 # Additional information:  
 
