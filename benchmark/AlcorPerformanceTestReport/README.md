@@ -1,5 +1,5 @@
 - [Overview:](#overview)
-    - [Challenges: Solved/pending](#challenges-solvedpending)
+    - [Challenges and solutions during test](#challenges-and-solutions-during-test)
 - [Performance Test Environment Setup](#performance-test-environment-setup)
   - [Alcor K8s cluster set up:](#alcor-k8s-cluster-set-up)
   - [Alcor Medina (OpenStack) cluster setup:](#alcor-medina-openstack-cluster-setup)
@@ -31,7 +31,7 @@ Alcor is a Hyperscale Cloud-Native SDN Platform; to test it, we have an OpenStac
 
 For the performance testing, we used Rally to test both the Alcor API load and end-to-end tests, including VM (involves Nova) creation. Rally is an OpenStack project, it enables the performance test to simulate normal user or users input from OpenStack Horizon UI or CLI.   
 
-### Challenges: Solved/pending 
+### Challenges and solutions during test 
 
 As mentioned earlier, we are using Rally to do both the Alcor API test and end-to-end VM creation tests inside a real OpenStack cluster.  
 The OpenStack itself sometimes is the bottleneck for our tests.  
@@ -181,9 +181,9 @@ To try to take out our results as much overhead from OpenStack as possible. We t
 
 **Our pod setup for our Alcor services in K8s during tests:**  
 
-Unless specified, we are running with six pods each for Alcor DBs in the K8s environment for each API test. As for the Alcor services in the K8s, we start with five pods each, run six tests on that config, increase the number of Alcor services pods by 5, then rerun the tests.  
+Unless specified, we are running with six pods each for Alcor DBs in the K8s environment for each API test. As for the Alcor services in the K8s, we start with five pods each, run six tests on that config, increase the number of Alcor services pods by 5, then rerun the tests. **Each column is a run configuration**.  
 
-|                          | 5 pod | 10 pod | 15 pod | 20 pod | 25 pod |
+|                          | 5 pods| 10 pods| 15 pods| 20 pods| 25 pods|
 | ------------------------ | ----- | ------ | ------ | ------ | ------ |
 | ignite\_alcor\_dpm       | 1     | 1      | 1      | 1      | 1      |
 | ignite\_alcor\_ncm       | 1     | 1      | 1      | 1      | 1      |
@@ -215,6 +215,9 @@ Unless specified, we are running with six pods each for Alcor DBs in the K8s env
 As we start to run our API tests, we are expected to see two patens.  
 - As we do more runs on the same number of pod configurations in k8s for Alcor, we see an increase in QPS as the system starts to warm up, then the QPS may decrease again since we didn't clean up the DB after each run.  
 - Second, we observed an increase in QPS as we increased the number of pods for Alcor services in the K8s cluster. But eventually, we may see the QPS stop growing or even decrease as we increase the number of Pods. Since we only have limited resources in our K8s cluster.  
+
+For this test setup, we are requesting Alcor 1000 times at 500 concurrent, and within each request will tell Alcor to create 10 port.  
+Below are the Rally test config file:  
 
 ```
 {
@@ -252,15 +255,17 @@ As we start to run our API tests, we are expected to see two patens.
 }
 ```
 
+Results:
+
 |       | 5 pods     | 10 pods    | 15 pods    | 20 pods    | 25 pods     |
 | ----- | ---------- | ---------- | ---------- | ---------- | ----------- |
 | run 1 | 1121.50692 | 1100.61395 | 1168.04086 | 1196.7473  | 1147.375386 |
 | run 2 | 2721.01403 | 2548.76433 | 2163.23577 | 2150.74443 | 1582.221191 |
-| run 3 | 2773.95136 | 2858.57847 | 3617.86452 | 3241.52709 | 3501.67849  |
+| run 3 | 2773.95136 | 2858.57847 | **3617.86452** | 3241.52709 | 3501.67849  |
 | run 4 | 1911.28605 | 2494.337   | 3078.50034 | 2987.68877 | 2765.557526 |
 | run 5 | 2519.02377 | 3374.84124 | 2971.57462 | 2623.8086  | 2519.896116 |
 | Avg   | 2481.3188  | 2819.13026 | 2957.79381 | 2750.94222 | 2592.338331 |
-| Max   | 2773.95136 | 3374.84124 | 3617.86452 | 3241.52709 | 3501.67849  |
+| Max   | 2773.95136 | 3374.84124 | **3617.86452** | 3241.52709 | 3501.67849  |
 
 | | |
 | --- | --- |
@@ -273,6 +278,9 @@ The above table and graph show that the maximum QPS we can reach is 3617, with 1
 ### When there is a lot of data in DB:  
 
 When there is a lot of data in DB, and list port is performed. Tests will get slower and slower. Since the un-deleted ports are still in the DB, which affects our list port performance, in turn, blocks our port creation process.  
+
+For this test setup, we are requesting Alcor 1000 times at 200 concurrent, and within each request will tell Alcor to create 10 port.  
+Below are the Rally test config file:  
 
 ```
 {
@@ -310,11 +318,13 @@ When there is a lot of data in DB, and list port is performed. Tests will get sl
 }
 ```
 
+Results:  
+
 ![A Lot of Ports in the DB](images/alot_port_in_db.png)
 
-| Total port in db   |       | 5          | 10         | 15         | 20         | 25         |
+| Total port in db   |       | 5 pods     | 10 pods    | 15 pods    | 20 pods    | 25 pods    |
 | ------------------ | ----- | ---------- | ---------- | ---------- | ---------- | ---------- |
-|            200,000 | run 1 | 660.419311 | 1148.14224 | 1207.53903 |            | 1278.44944 |
+|            200,000 | run 1 | 660.419311 | 1148.14224 | 1207.53903 |     NA     | 1278.44944 |
 |            400,000 | run 2 | 531.593386 | 1301.06787 | 649.221554 | 1291.28651 | 962.154517 |
 |            600,000 | run 3 | 407.093267 | 839.83475  | 390.815682 | 1109.67947 | 595.287361 |
 |            800,000 | run 4 | 333.147894 | 605.249417 | 277.406563 | 643.881015 | 403.740213 |
@@ -362,6 +372,8 @@ Same as above test, but without list port
     }
 }
 ```
+Results:  
+
 | run 1 | run 2|
 | --- | --- |
 | ![](images/without_list_port_run1.png) | ![](images/without_list_port_run2.png) |
@@ -389,6 +401,9 @@ The subnet API tests show that the limiting factor for QPS is not the number of 
 But rather is the DB performance. As more data is written into the DB, our QPS becomes slower, which is not correct. Usually, we should see an upward curve since our system needs to warm up after a complete reset.  
 
 ### 200 Concurrent:  
+
+For this test setup, we are requesting Alcor 200 times at 200 concurrent, and within each request will tell Alcor to create 10 port.  
+Below are the Rally test config file:  
 
 ```
 {
@@ -423,6 +438,9 @@ But rather is the DB performance. As more data is written into the DB, our QPS b
     }
 }
 ```
+
+Results:  
+
 | | |
 | --- | --- |
 | ![](images/subnet_200c.png) | ![](images/subnet_200c_p.png) |
@@ -430,15 +448,18 @@ But rather is the DB performance. As more data is written into the DB, our QPS b
 |       | 5 pods     | 10 pods    | 15 pods    | 20 pods    | 25 pods    |
 | ----- | ---------- | ---------- | ---------- | ---------- | ---------- |
 | run 1 | 122.171943 | 192.234644 | 165.971632 | 189.46115  | 170.649043 |
-| run 2 | 213.156499 | 207.863239 | 208.112991 | 237.870493 | 204.961099 |
+| run 2 | 213.156499 | 207.863239 | 208.112991 | **237.870493** | 204.961099 |
 | run 3 | 158.115328 | 123.516043 | 131.565865 | 181.897132 | 140.867057 |
 | run 4 | 109.365801 | 108.49676  | 95.6998481 | 117.866189 | 96.2321135 |
 | run 5 | 94.2282891 | 91.5762681 | 85.3390427 | 103.22579  | 83.0531852 |
 | run 6 | 66.536477  | 71.8048504 | 71.0391698 | 89.0149473 | 70.3936466 |
 | Avg   | 127.262389 | 132.581967 | 126.288091 | 153.222617 | 127.692691 |
-| Max   | 213.156499 | 207.863239 | 208.112991 | 237.870493 | 204.961099 |
+| Max   | 213.156499 | 207.863239 | 208.112991 | **237.870493** | 204.961099 |
 
 ### 300 Concurrent:  
+
+For this test setup, we are requesting Alcor 300 times at 300 concurrent, and within each request will tell Alcor to create 10 port.  
+Below are the Results:  
 
 | | |
 | --- | --- |
@@ -446,16 +467,19 @@ But rather is the DB performance. As more data is written into the DB, our QPS b
 
 |       | 5 pods     | 10 pods    | 15 pods | 20 pods    | 25 pods    |
 | ----- | ---------- | ---------- | ------- | ---------- | ---------- |
-| run 1 | 168.864333 | 196.305945 |         | 202.222719 | 194.40302  |
-| run 2 | 119.860926 | 148.726237 |         | 115.141975 | 175.556609 |
-| run 3 | 73.4193208 | 91.39514   |         | 67.2313068 | 102.948376 |
-| run 4 | 49.9883674 | 66.2545772 |         | 47.2278267 | 76.6703555 |
-| run 5 | 37.4873497 | 49.0405038 |         | 41.3234798 | 64.2762938 |
-| run 6 | 29.7931549 | 40.0456381 |         | 35.6744003 | 51.438147  |
-| Avg   | 79.9022419 | 98.6280068 |         | 84.8036178 | 110.882134 |
-| Max   | 168.864333 | 196.305945 |         | 202.222719 | 194.40302  |
+| run 1 | 168.864333 | 196.305945 |    NA   | **202.222719** | 194.40302  |
+| run 2 | 119.860926 | 148.726237 |    NA   | 115.141975 | 175.556609 |
+| run 3 | 73.4193208 | 91.39514   |    NA   | 67.2313068 | 102.948376 |
+| run 4 | 49.9883674 | 66.2545772 |    NA   | 47.2278267 | 76.6703555 |
+| run 5 | 37.4873497 | 49.0405038 |    NA   | 41.3234798 | 64.2762938 |
+| run 6 | 29.7931549 | 40.0456381 |    NA   | 35.6744003 | 51.438147  |
+| Avg   | 79.9022419 | 98.6280068 |    NA   | 84.8036178 | 110.882134 |
+| Max   | 168.864333 | 196.305945 |    NA   | **202.222719** | 194.40302  |
 
 ### 400 Concurrent:  
+
+For this test setup, we are requesting Alcor 400 times at 400 concurrent, and within each request will tell Alcor to create 10 port.  
+Below are the Results:  
 
 | | |
 | --- | --- |
@@ -463,16 +487,19 @@ But rather is the DB performance. As more data is written into the DB, our QPS b
 
 |       | 5 pods | 10 pods    | 15 pods    | 20 pods    | 25 pods    |
 | ----- | ------ | ---------- | ---------- | ---------- | ---------- |
-| run 1 |        | 230.72542  | 239.914779 | 212.821755 | 204.047763 |
-| run 2 |        | 113.390071 | 140.163994 | 143.907342 | 132.528615 |
-| run 3 |        | 64.9454037 | 84.8448904 | 90.7973293 | 84.7995649 |
-| run 4 |        | 48.5527157 | 63.9578724 | 67.3949125 | 61.9916036 |
-| run 5 |        | 45.0106555 | 49.4495767 | 50.9884834 | 49.9585688 |
-| run 6 |        | 49.1970909 | 39.2756892 | 39.0478244 | 43.0528196 |
-| Avg   |        | 91.9702261 | 102.934467 | 100.826274 | 96.0631558 |
-| Max   |        | 230.72542  | 239.914779 | 212.821755 | 204.047763 |
+| run 1 |   NA   | 230.72542  | **239.914779** | 212.821755 | 204.047763 |
+| run 2 |   NA   | 113.390071 | 140.163994 | 143.907342 | 132.528615 |
+| run 3 |   NA   | 64.9454037 | 84.8448904 | 90.7973293 | 84.7995649 |
+| run 4 |   NA   | 48.5527157 | 63.9578724 | 67.3949125 | 61.9916036 |
+| run 5 |   NA   | 45.0106555 | 49.4495767 | 50.9884834 | 49.9585688 |
+| run 6 |   NA   | 49.1970909 | 39.2756892 | 39.0478244 | 43.0528196 |
+| Avg   |   NA   | 91.9702261 | 102.934467 | 100.826274 | 96.0631558 |
+| Max   |   NA   | 230.72542  | **239.914779** | 212.821755 | 204.047763 |
 
 ### 500 Concurrent:  
+
+For this test setup, we are requesting Alcor 500 times at 500 concurrent, and within each request will tell Alcor to create 10 port.  
+Below are the Results:  
 
 | | |
 | --- | --- |
@@ -480,14 +507,14 @@ But rather is the DB performance. As more data is written into the DB, our QPS b
 
 |       | 5 pods     | 10 pods    | 15 pods    | 20 pods    | 25 pods    |
 | ----- | ---------- | ---------- | ---------- | ---------- | ---------- |
-| run 1 | 180.997654 | 190.303224 | 211.520134 | 223.21284  | 211.6647   |
+| run 1 | 180.997654 | 190.303224 | 211.520134 | **223.21284**  | 211.6647   |
 | run 2 | 87.032023  | 98.4634246 | 76.639953  | 103.562334 | 109.248082 |
 | run 3 | 52.1193785 | 61.2469792 | 50.0596896 | 74.3989519 | 71.4504471 |
 | run 4 | 41.2890729 | 62.7838403 | 36.3336839 | 67.9391031 | 52.7183257 |
 | run 5 | 30.0860401 | 34.7104692 | 29.5738334 | 54.4772135 | 49.2410235 |
 | run 6 | 32.0612311 | 32.9007633 | 28.246774  | 40.2831089 | 44.1368398 |
 | Avg   | 70.5975665 | 80.0681168 | 72.0623447 | 93.9789253 | 89.7432363 |
-| Max   | 180.997654 | 190.303224 | 211.520134 | 223.21284  | 211.6647   |
+| Max   | 180.997654 | 190.303224 | 211.520134 | **223.21284**  | 211.6647   |
 
 <br />
 
@@ -497,15 +524,50 @@ The VPC test is, in general, very similar to the previous tests.
 The Biggest difference is when creating VPC; each time, it will have a considerable Keystone overhead that we cannot remove during calculation.  
 Since the earlier tests are all within the VPC, then do some operation, then we can remove the first operation overhead. But in this case, each VPC is stand-alone and needs the entire process to be created. This is why we are seeing such low QPS on creating VPC.   
 
+For this test setup, we are requesting Alcor 600 times at 600 concurrent, and within each request Alcor is creating 1 port.  
+
+
+```
+ {
+      "title": "NeutronNetworks.create_and_list_networks",
+      "description": "Create a network and then list all networks.",
+      "scenario": {
+        "NeutronNetworks.create_and_list_networks": {
+          "network_create_args": {}
+        }
+      },
+      "contexts": {
+        "users": {
+          "tenants": 1,
+          "users_per_tenant": 2
+        }
+      },
+      "runner": {
+        "constant": {
+          "times": 600,
+          "concurrency": 600
+        }
+      },
+      "hooks": [],
+      "sla": {
+        "failure_rate": {
+          "max": 0
+        }
+      }
+    }
+```
+
+Results:  
+
 |       | 5 pods     | 10 pods | 15 pods    | 20 pods    | 25 pods     |
 | ----- | ---------- | ------- | ---------- | ---------- | ----------- |
-| run 1 | 87.3547123 |         | 116.070835 | 117.163573 | 106.3543509 |
-| run 2 | 97.9381727 |         | 151.075641 | 141.532611 | 135.6119688 |
-| run 3 | 127.521529 |         | 119.350571 | 150.475931 | 138.4461197 |
-| run 4 | 107.651403 |         | 162.683393 | 142.332809 | 125.1218739 |
-| run 5 | 97.4664581 |         | 157.249331 | 106.5709   | 132.83853   |
-| Avg   | 107.644391 |         | 147.589734 | 135.228063 | 133.0046231 |
-| Max   | 127.521529 |         | 162.683393 | 150.475931 | 138.4461197 |
+| run 1 | 87.3547123 |    NA   | 116.070835 | 117.163573 | 106.3543509 |
+| run 2 | 97.9381727 |    NA   | 151.075641 | 141.532611 | 135.6119688 |
+| run 3 | 127.521529 |    NA   | 119.350571 | 150.475931 | 138.4461197 |
+| run 4 | 107.651403 |    NA   | **162.683393** | 142.332809 | 125.1218739 |
+| run 5 | 97.4664581 |    NA   | 157.249331 | 106.5709   | 132.83853   |
+| Avg   | 107.644391 |    NA   | 147.589734 | 135.228063 | 133.0046231 |
+| Max   | 127.521529 |    NA   | **162.683393** | 150.475931 | 138.4461197 |
 
 | | |
 | --- | --- |
@@ -526,7 +588,7 @@ Below is a list of different tests we did with VM creation; the results do not s
 
 ## End-to-end Test, Small VPC:
 
-For this test case, we boot one VM per one VPC.
+For this small VPC test case, we boot one VM per one VPC. Request Alcor at 30 concurrency, within each request is booting 10 VPC, and for each VPC attach one VM.  
 
 ```
 {
@@ -572,6 +634,8 @@ For this test case, we boot one VM per one VPC.
 }
 ```
 
+Results:  
+
 ![](images/ts3_30c.png)
 
 |       | 5 pods     |
@@ -589,6 +653,7 @@ From the graph, we can see about 4.5 QPS we can reach. For run 5, the VM creatio
 ## End-to-end VM creation Test for Large VPC scenario:  
 
 In this test, we will have multiple VMs per VPC. And each VM will have one port attached to it.  
+Rally will request Alcor with 15 concurrent requests; within each request, Alcor will create 10 VPC, and within each VPC will be 10 VMs attached to it.  
 
 ```
 {
@@ -635,6 +700,8 @@ In this test, we will have multiple VMs per VPC. And each VM will have one port 
     }
 }
 ```
+
+Results:  
 
 ![](images/ts4_15c.png)
 
@@ -698,6 +765,8 @@ This test is similar to the above but compared to only one port per VM. This tes
     }
 }
 ```
+
+Results:  
 
 ![](images/alcor-port_9n-10s-10p-10t-10c_run1-2022-03-05_00-41-28.json_boxplot.png)
 
