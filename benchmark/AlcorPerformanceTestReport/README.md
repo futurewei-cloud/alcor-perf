@@ -29,7 +29,9 @@
 In this performance test report, we will discuss the performance of the Alcor microservice.  
 Alcor is a Hyperscale Cloud-Native SDN Platform; to test it, we have an OpenStack cluster called Medina and replace the Neutron in the OpenStack with Alcor. Neutron is an OpenStack project to provide "network connectivity as a service" between interface devices (e.g., vNICs) managed by other OpenStack services (e.g., Nova).  
 
-For the performance testing, we used Rally to test both the Alcor API load and end-to-end tests, including VM (involves Nova) creation. Rally is an OpenStack project, it enables the performance test to simulate normal user or users input from OpenStack Horizon UI or CLI.   
+For the performance testing, we used Rally to test both the Alcor API load and end-to-end tests, including VM (involves Nova) creation. Rally is an OpenStack project, it enables the performance test to simulate normal user or users input from OpenStack Horizon UI or CLI.  
+
+This report's performance tests were conducted between January 2022 and March 2022 using the latest Alcor. The reason has been many of the tests take hours to complete, and many try to have a total success rate due to the issues and challenges listed below.  
 
 ### Challenges and solutions during test 
 
