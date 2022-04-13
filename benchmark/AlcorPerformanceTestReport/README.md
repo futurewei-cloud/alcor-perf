@@ -1,3 +1,5 @@
+# Alcor Performance Test Report  
+- [Alcor Performance Test Report](#alcor-performance-test-report)
 - [Overview:](#overview)
     - [Challenges and solutions during test](#challenges-and-solutions-during-test)
 - [Performance Test Environment Setup](#performance-test-environment-setup)
@@ -15,9 +17,9 @@
     - [300 Concurrent:](#300-concurrent)
     - [400 Concurrent:](#400-concurrent)
     - [500 Concurrent:](#500-concurrent)
-  - [API Test, VPC:](#api-test-vpc)
+  - [Alcor API Test for VPC creation and list:](#alcor-api-test-for-vpc-creation-and-list)
   - [End to End Test with VM Creation:](#end-to-end-test-with-vm-creation)
-  - [End-to-end Test, Small VPC:](#end-to-end-test-small-vpc)
+  - [End-to-end VM creation Test for Small VPC scenario:](#end-to-end-vm-creation-test-for-small-vpc-scenario)
   - [End-to-end VM creation Test for Large VPC scenario:](#end-to-end-vm-creation-test-for-large-vpc-scenario)
   - [End-to-end VM creation Test for Multiple Port per VM scenario:](#end-to-end-vm-creation-test-for-multiple-port-per-vm-scenario)
 - [Conclusions and Future Work:](#conclusions-and-future-work)
@@ -31,18 +33,18 @@ Alcor is a Hyperscale Cloud-Native SDN Platform; to test it, we have an OpenStac
 
 For the performance testing, we used Rally to test both the Alcor API load and end-to-end tests, including VM (involves Nova) creation. Rally is an OpenStack project, it enables the performance test to simulate normal user or users input from OpenStack Horizon UI or CLI.  
 
-This report's performance tests were conducted between January 2022 and March 2022 using the latest Alcor. The reason has been many of the tests take hours to complete, and many try to have a total success rate due to the issues and challenges listed below.  
+This report's performance tests were conducted between January 2022 and March 2022 using the latest Alcor. The reason take so long is that many of the tests take hours to complete, and many try to have a total success rate due to the issues and challenges listed below.  
 
 ### Challenges and solutions during test 
 
 As mentioned earlier, we are using Rally to do both the Alcor API test and end-to-end VM creation tests inside a real OpenStack cluster.  
 The OpenStack itself sometimes is the bottleneck for our tests.  
-For example, when testing the Alcor API to create a network, Rally will go through OpenStack, and most OpenStack operations, if not all, will have to go through Keystone, which added an additional overhead to our test. As for the end-to-end VM creation tests, not only will Keystone be an overhead, Nova itself sometimes can become the bottleneck for our tests since Nova is very complex and involves many steps to create a VM. We will have further explained this later in the report.  
+For example, when testing the Alcor API to create a network, Rally will go through OpenStack, and most OpenStack operations, if not all, will have to go through Keystone, which added an additional overhead to our test. As for the end-to-end VM creation tests, not only will Keystone be an overhead, Nova itself sometimes can become the bottleneck for our tests since Nova is very complex and involves many steps to create a VM. We will have further explanation of those issues later in the report.  
 
-Another problem we run into is that when running performance tests, it can take extremely long to finish a test. There were two main scenarios:  
-- First cause is during the clean-up stage of the performance tests. For example, we will create ports with really high concurrency. But after the test has finished, Rally will try to delete those ports been created earlier one by one. Which sometimes is extremely time-consuming.  
-To **SOLVE** this slow clean-up issue, we disabled the network clean-up in Rally's Python code, reset our Alcor in the K8s cluster, and deleted Alcor's DB. From our solution, we can shorten 50 minutes long test to just 5 minutes.  
-- The second issue we are running into that causes the performance tests to last really long is during end-to-end tests with VM creation. Not only this also include the above issue for VM clean up. It also has problems while creating VM. For example, VM doesn't always complete successfully during the Rally test. Rally will wait 300 seconds per VM if something goes wrong. And if some VM was not created successfully, Rally may very well also have issues deleting that particular VM, which will wait for another 600 seconds before time out.  
+Another problem we ran into is that when running the performance tests, it can take extremely long to finish a test. There were two main scenarios:  
+- First cause is during the clean-up stage of the performance tests. For example, we will create ports with really high concurrency. But after the test has finished, Rally will try to delete those ports been created earlier one by one, which sometimes is extremely time-consuming.  
+To **SOLVE** this slow clean-up issue, we disabled the network clean-up process in Rally's Python code, reset our Alcor in the K8s cluster, and deleted Alcor's DB. From our solution, we can shorten a 50 minutes long test to just 5 minutes.  
+- The second issue we are running into that causes the performance tests to last really long is during end-to-end tests with VM creation. Not only this also include the above issue for VM clean up. It also has problems while creating VM. For example, VM doesn't always complete successfully during the Rally test. Rally will wait 300 seconds per VM if something goes wrong. And if some VMs were not created successfully, Rally is very likely to have issues deleting that particular VM, which will wait for another 600 seconds before time out.  
 Our solutions to help with this situation are: Rebooting ACA, Nova-compute, clean-up OVS on all compute nodes, and rebooting Nova service in the controllers. Of course, those steps won't generate 100% success rate but will definitely help with the situation.  
 
 # Performance Test Environment Setup 
@@ -64,7 +66,7 @@ Our entire setup consists of an OpenStack cluster with five controller nodes and
 ## Alcor Medina (OpenStack) cluster setup:  
 
 Our Alcor Medina (OpenStack) cluster is configured with five controller nodes and 64 workers (compute) nodes.  
-Below is the list of OpenStack services running on our five controller nodes; all below services have one copy on each machine:  
+Below is the list of OpenStack services running on each controller nodes:  
 - cinder_api_container  
 - galera_container (Not used)  
 - glance_container  
@@ -169,9 +171,9 @@ Rally works alongside OpenStack, and it will try to simulate the user input from
 
 # Performance Test Cases and Scenarios  
 
-We have two types of tests, API tests, and end-to-end tests:  
+We have two types of test:  
 - For API level tests, we test the Alcor APIs only. Requests are sent directly from Rally to Alcor, then let Alcor do its job and write in DB  
-  - Within API level tests, we mainly have Port, Subnet, VPC create and list test.
+  - Within API level tests, we mainly have Port, Subnet, VPC creation and list test.
 - For end-to-end tests, Rally will still send API requests to Alcor and let Alcor do its thing. The difference has been that we are using the results from Alcor; Alcor has to configure ACA and let nova boot VMs and attach the Port to the VMs.  
   - For end-to-end tests, we mainly have different scenarios for how many VM per VPC since all end-to-end tests booting VM will require the entire VPC, Subnet, and Port to function.  
 
@@ -179,11 +181,11 @@ During our Rally performance testing on Alcor API level and end-to-end with VM c
 To try to take out our results as much overhead from OpenStack as possible. We take out the first operation from the tests when calculating the QPS because that one will be impacted the most by the Keystone slowdown. For example, when creating ten ports, we observed that the first Port usually takes 5 to 10 times more time than other ports.  
 
 **How we calculated our QPS in the tests:**  
-> QPS = number of current / time per task  
+> QPS = number of concurrent / time per task  
 
 **Our pod setup for our Alcor services in K8s during tests:**  
 
-Unless specified, we are running with six pods each for Alcor DBs in the K8s environment for each API test. As for the Alcor services in the K8s, we start with five pods each, run six tests on that config, increase the number of Alcor services pods by 5, then rerun the tests. **Each column is a run configuration**.  
+Unless specified, we are running with six pods each for Alcor DBs in the K8s environment for each API test. As for the Alcor services in the K8s, we start with five pods each, run six tests on that config, increase the number of Alcor services pods by 5, then rerun the tests. **Each column is a Alcor pod configuration for a test run**.  
 
 |                          | 5 pods| 10 pods| 15 pods| 20 pods| 25 pods|
 | ------------------------ | ----- | ------ | ------ | ------ | ------ |
@@ -218,7 +220,7 @@ As we start to run our API tests, we are expected to see two patens.
 - As we do more runs on the same number of pod configurations in k8s for Alcor, we see an increase in QPS as the system starts to warm up, then the QPS may decrease again since we didn't clean up the DB after each run.  
 - Second, we observed an increase in QPS as we increased the number of pods for Alcor services in the K8s cluster. But eventually, we may see the QPS stop growing or even decrease as we increase the number of Pods. Since we only have limited resources in our K8s cluster.  
 
-For this test setup, we are requesting Alcor 1000 times at 500 concurrent, and within each request will tell Alcor to create 10 port.  
+For this test setup, we are requesting Alcor 1000 times at 500 concurrent, and within each request will tell Alcor to create 10 ports.  
 Below are the Rally test config file:  
 
 ```
@@ -279,7 +281,7 @@ The above table and graph show that the maximum QPS we can reach is 3617, with 1
 
 ### When there is a lot of data in DB:  
 
-When there is a lot of data in DB, and list port is performed. Tests will get slower and slower. Since the un-deleted ports are still in the DB, which affects our list port performance, in turn, blocks our port creation process.  
+When there is a lot of data in DB, and list port is performed. QPS will get slower and slower. Since the un-deleted ports are still in the DB, which affects our list port performance, in turn, blocks our port creation process. Graph and table are listed below after the test config file.    
 
 For this test setup, we are requesting Alcor 1000 times at 200 concurrent, and within each request will tell Alcor to create 10 port.  
 Below are the Rally test config file:  
@@ -392,7 +394,7 @@ Results:
 | Avg   | 586.73 | 1211.76 | 1363.29 | 1435.16 | \- | Avg   | 607.08     | 1161.76    | 1439.16    | 1515.37    |
 | Max   | 658.90 | 1301.53 | 1530.06 | 1622.19 | \- | Max   | 695.68     | 1293.09    | 1537.51    | 1724.25    |
 
-From the above run, we can see. If we don't perform the 'list' in the 'create and list port' test. The QPS will keep going up as the system is more and more warmed up. Unlike in the earlier test, when the DB has too much data, the 'list port' operation will take.  
+From the above run, we can see. If we don't perform the 'list' in the 'create and list port' test. The QPS will keep going up as the system is more and more warmed up. Unlike in the earlier test, when the DB has too much data, the 'list port' operation will take awhile.  
 
 
 <br />
@@ -518,13 +520,15 @@ Below are the Results:
 | Avg   | 70.5975665 | 80.0681168 | 72.0623447 | 93.9789253 | 89.7432363 |
 | Max   | 180.997654 | 190.303224 | 211.520134 | **223.21284**  | 211.6647   |
 
+From those above different concurrent tests, we don't see a clear trend in graph or table of how different concurrent is affecting our QPS.  
+
 <br />
 
-## API Test, VPC:  
+## Alcor API Test for VPC creation and list:  
 
 The VPC test is, in general, very similar to the previous tests.  
-The Biggest difference is when creating VPC; each time, it will have a considerable Keystone overhead that we cannot remove during calculation.  
-Since the earlier tests are all within the VPC, then do some operation, then we can remove the first operation overhead. But in this case, each VPC is stand-alone and needs the entire process to be created. This is why we are seeing such low QPS on creating VPC.   
+The Biggest difference is when creating VPC; it will have a considerable Keystone overhead that we cannot remove during calculation.  
+Since the earlier tests are all within the VPC, VPC will be created during the setup of the test, then do some operation like creating subnet or port, that way we can remove the first operation overhead of creating subnet or port. But in this case, each VPC is stand-alone and needs the entire process(go through keystone every time) to be created. This is why we are seeing such low QPS on creating VPC. Graph and table results are listed bellow.  
 
 For this test setup, we are requesting Alcor 600 times at 600 concurrent, and within each request Alcor is creating 1 port.  
 
@@ -588,9 +592,9 @@ It is hard to get a test to pass too, since Nova booting VM will fail from time 
 
 Below is a list of different tests we did with VM creation; the results do not seem ideal. But compared with others' performance on the internet, they seem reasonable with our current OpenStack configuration.  
 
-## End-to-end Test, Small VPC:
+## End-to-end VM creation Test for Small VPC scenario:  
 
-For this small VPC test case, we boot one VM per one VPC. Request Alcor at 30 concurrency, within each request is booting 10 VPC, and for each VPC attach one VM.  
+For this small VPC test case. The test request Alcor booting 10 VPC, and one VM for each VPC. The same request will be issued 30 times concurrently (concurrency = 30).  
 
 ```
 {
@@ -713,13 +717,13 @@ Results:
 | run 2 | 0.42073825 |
 | run 3 | 0.43146736 |
 
-For large VPC scenario, booting 10 VM per VPC we can reach about .4 QPS.  
+For large VPC scenario, booting 10 VM per VPC we can reach about 0.4 QPS.  
 
 <br />
 
 ## End-to-end VM creation Test for Multiple Port per VM scenario:   
 
-This test is similar to the above but compared to only one port per VM. This test will have ten ports per VM.  
+This test is similar to the above but in compared to only one port per VM. This test will have ten ports per VM.  
 
 ```
 {
@@ -772,7 +776,7 @@ Results:
 
 ![](images/alcor-port_9n-10s-10p-10t-10c_run1-2022-03-05_00-41-28.json_boxplot.png)
 
-We can see from the above graph that during our test with multiple port per VM. The time toke for Alcor to perform is reasonably fast. But "boot server" by Nova is taken about 30 seconds each, which significantly limits our end-to-end performance.  
+We can see from the above graph that during our test with multiple port per VM. The time take for Alcor to perform is reasonably fast. But "boot server" by Nova is taken about 30 seconds each, which significantly limits our end-to-end performance.  
 
 <br />
 
